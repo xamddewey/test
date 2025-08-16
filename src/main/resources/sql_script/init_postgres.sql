@@ -3,6 +3,17 @@
 -- 此处仅提供语法，实际执行时需要连接到默认数据库(如postgres)
 -- CREATE DATABASE expense_sharing_app WITH ENCODING='UTF8' LC_COLLATE='en_US.UTF8' LC_CTYPE='en_US.UTF8';
 
+-- 角色表，存储系统中所有可能的角色
+CREATE TABLE IF NOT EXISTS roles
+(
+    id          SERIAL PRIMARY KEY,                            -- 主键ID
+    role_name   VARCHAR(50) NOT NULL UNIQUE,                   -- 角色名称，唯一
+    description TEXT,                                          -- 角色描述
+    role_type   VARCHAR(20) NOT NULL,                          -- 角色类型：ADMIN（管理员）或USER（普通用户）
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,           -- 创建时间
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP            -- 更新时间
+);
+
 -- 用户表，存储用户信息
 CREATE TABLE IF NOT EXISTS users
 (
@@ -10,7 +21,6 @@ CREATE TABLE IF NOT EXISTS users
     username   VARCHAR(50)  NOT NULL UNIQUE,                  -- 用户名，唯一
     password   VARCHAR(255) NOT NULL,                         -- 密码，加密存储
     email      VARCHAR(100) NOT NULL UNIQUE,                  -- 电子邮箱，唯一
-    role       VARCHAR(10) CHECK (role IN ('ADMIN', 'USER')) DEFAULT 'USER', -- 用户角色：管理员或普通用户
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,           -- 创建时间
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP            -- 更新时间
 );
@@ -18,16 +28,43 @@ CREATE TABLE IF NOT EXISTS users
 -- 注意：在PostgreSQL中，可以使用COMMENT ON语句添加表和列的注释
 -- 以下是PostgreSQL中添加注释的正确语法，但在当前SQL解析器中可能会报错
 -- 在实际PostgreSQL环境中使用时，请取消以下注释：
-/*
+COMMENT ON TABLE roles IS '角色表，存储系统中所有可能的角色';
+COMMENT ON COLUMN roles.id IS '主键ID';
+COMMENT ON COLUMN roles.role_name IS '角色名称，唯一';
+COMMENT ON COLUMN roles.description IS '角色描述';
+COMMENT ON COLUMN roles.role_type IS '角色类型：ADMIN（管理员）或USER（普通用户）';
+COMMENT ON COLUMN roles.created_at IS '创建时间';
+COMMENT ON COLUMN roles.updated_at IS '更新时间';
+
 COMMENT ON TABLE users IS '用户表，存储用户信息';
 COMMENT ON COLUMN users.id IS '主键ID';
 COMMENT ON COLUMN users.username IS '用户名，唯一';
 COMMENT ON COLUMN users.password IS '密码，加密存储';
 COMMENT ON COLUMN users.email IS '电子邮箱，唯一';
-COMMENT ON COLUMN users.role IS '用户角色：管理员或普通用户';
 COMMENT ON COLUMN users.created_at IS '创建时间';
 COMMENT ON COLUMN users.updated_at IS '更新时间';
-*/
+
+-- 用户角色关联表，存储用户和角色的多对多关系
+CREATE TABLE IF NOT EXISTS user_roles
+(
+    id         SERIAL PRIMARY KEY,                            -- 主键ID
+    user_id    BIGINT NOT NULL,                               -- 用户ID，关联users表的id
+    role_id    BIGINT NOT NULL,                               -- 角色ID，关联roles表的id
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,           -- 创建时间
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,           -- 更新时间
+    CONSTRAINT unique_user_role UNIQUE (user_id, role_id)     -- 唯一约束，确保一个用户不会重复分配同一个角色
+);
+CREATE INDEX idx_user_id_roles ON user_roles (user_id);       -- 用户ID索引
+CREATE INDEX idx_role_id_users ON user_roles (role_id);       -- 角色ID索引
+
+-- 在PostgreSQL中添加此表的注释（在实际环境中取消注释）：
+COMMENT ON TABLE user_roles IS '用户角色关联表，存储用户和角色的多对多关系';
+COMMENT ON COLUMN user_roles.id IS '主键ID';
+COMMENT ON COLUMN user_roles.user_id IS '用户ID，关联users表的id';
+COMMENT ON COLUMN user_roles.role_id IS '角色ID，关联roles表的id';
+COMMENT ON COLUMN user_roles.created_at IS '创建时间';
+COMMENT ON COLUMN user_roles.updated_at IS '更新时间';
+COMMENT ON CONSTRAINT unique_user_role ON user_roles IS '唯一约束，确保一个用户不会重复分配同一个角色';
 
 -- 账本表，存储所有账本信息
 CREATE TABLE IF NOT EXISTS account_ledgers
@@ -42,7 +79,6 @@ CREATE TABLE IF NOT EXISTS account_ledgers
 CREATE INDEX idx_creator_id ON account_ledgers (creator_id); -- 创建者ID索引
 
 -- 在PostgreSQL中添加此表的注释（在实际环境中取消注释）：
-/*
 COMMENT ON TABLE account_ledgers IS '账本表，存储所有账本信息';
 COMMENT ON COLUMN account_ledgers.id IS '主键ID';
 COMMENT ON COLUMN account_ledgers.ledger_name IS '账本名称';
@@ -50,7 +86,6 @@ COMMENT ON COLUMN account_ledgers.description IS '账本描述';
 COMMENT ON COLUMN account_ledgers.creator_id IS '创建者ID，关联users表的id';
 COMMENT ON COLUMN account_ledgers.created_at IS '创建时间';
 COMMENT ON COLUMN account_ledgers.updated_at IS '更新时间';
-*/
 
 -- 支出类别表，存储所有可能的支出类别
 CREATE TABLE IF NOT EXISTS expense_categories
@@ -247,6 +282,13 @@ COMMENT ON COLUMN settlements.created_at IS '创建时间';
 COMMENT ON COLUMN settlements.updated_at IS '更新时间';
 
 
+-- 插入系统默认角色
+INSERT INTO roles (role_name, description, role_type)
+VALUES ('SUPER_ADMIN', '超级管理员，拥有系统最高权限', 'ADMIN'),
+       ('ADMIN', '普通管理员，拥有一般管理权限', 'ADMIN'),
+       ('LEDGER_OWNER', '账本所有者，可以管理自己创建的账本', 'USER'),
+       ('LEDGER_PARTICIPANT', '账本参与者，可以参与他人的账本', 'USER');
+
 -- 插入系统默认支出类别
 INSERT INTO expense_categories (category_name, description, is_default, is_system, display_order)
 VALUES ('餐饮', '日常餐饮支出，包括外卖、堂食等', TRUE, TRUE, 10),
@@ -293,7 +335,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 为每个表创建更新时间触发器
+CREATE TRIGGER update_roles_updated_at BEFORE UPDATE ON roles
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+CREATE TRIGGER update_user_roles_updated_at BEFORE UPDATE ON user_roles
     FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 CREATE TRIGGER update_account_ledgers_updated_at BEFORE UPDATE ON account_ledgers
