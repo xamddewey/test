@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class ApiResponse<T> {
+public class ApiResult<T> {
 
     /**
      * 响应状态码
@@ -56,8 +56,8 @@ public class ApiResponse<T> {
     /**
      * 成功响应（无数据）
      */
-    public static <T> ApiResponse<T> success() {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> success() {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.SUCCESS.getCode())
                 .message(ResponseCode.SUCCESS.getMessage())
                 .build();
@@ -66,8 +66,8 @@ public class ApiResponse<T> {
     /**
      * 成功响应（带数据）
      */
-    public static <T> ApiResponse<T> success(T data) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> success(T data) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.SUCCESS.getCode())
                 .message(ResponseCode.SUCCESS.getMessage())
                 .data(data)
@@ -77,8 +77,8 @@ public class ApiResponse<T> {
     /**
      * 成功响应（自定义消息）
      */
-    public static <T> ApiResponse<T> success(String message, T data) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> success(String message, T data) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.SUCCESS.getCode())
                 .message(message)
                 .data(data)
@@ -88,8 +88,8 @@ public class ApiResponse<T> {
     /**
      * 失败响应
      */
-    public static <T> ApiResponse<T> error(ResponseCode responseCode) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> error(ResponseCode responseCode) {
+        return ApiResult.<T>builder()
                 .code(responseCode.getCode())
                 .message(responseCode.getMessage())
                 .build();
@@ -98,8 +98,8 @@ public class ApiResponse<T> {
     /**
      * 失败响应（自定义消息）
      */
-    public static <T> ApiResponse<T> error(ResponseCode responseCode, String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> error(ResponseCode responseCode, String message) {
+        return ApiResult.<T>builder()
                 .code(responseCode.getCode())
                 .message(message)
                 .build();
@@ -108,8 +108,8 @@ public class ApiResponse<T> {
     /**
      * 失败响应（自定义状态码和消息）
      */
-    public static <T> ApiResponse<T> error(Integer code, String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> error(Integer code, String message) {
+        return ApiResult.<T>builder()
                 .code(code)
                 .message(message)
                 .build();
@@ -118,8 +118,8 @@ public class ApiResponse<T> {
     /**
      * 业务异常响应
      */
-    public static <T> ApiResponse<T> businessError(String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> businessError(String message) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.BUSINESS_ERROR.getCode())
                 .message(message)
                 .build();
@@ -128,8 +128,8 @@ public class ApiResponse<T> {
     /**
      * 参数验证失败响应
      */
-    public static <T> ApiResponse<T> validationError(String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> validationError(String message) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.VALIDATION_ERROR.getCode())
                 .message(message)
                 .build();
@@ -138,8 +138,8 @@ public class ApiResponse<T> {
     /**
      * 未授权响应
      */
-    public static <T> ApiResponse<T> unauthorized() {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> unauthorized() {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.UNAUTHORIZED.getCode())
                 .message(ResponseCode.UNAUTHORIZED.getMessage())
                 .build();
@@ -148,8 +148,8 @@ public class ApiResponse<T> {
     /**
      * 权限不足响应
      */
-    public static <T> ApiResponse<T> forbidden() {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> forbidden() {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.FORBIDDEN.getCode())
                 .message(ResponseCode.FORBIDDEN.getMessage())
                 .build();
@@ -158,8 +158,8 @@ public class ApiResponse<T> {
     /**
      * 资源不存在响应
      */
-    public static <T> ApiResponse<T> notFound() {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> notFound() {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.NOT_FOUND.getCode())
                 .message(ResponseCode.NOT_FOUND.getMessage())
                 .build();
@@ -168,8 +168,8 @@ public class ApiResponse<T> {
     /**
      * 资源不存在响应（自定义消息）
      */
-    public static <T> ApiResponse<T> notFound(String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> notFound(String message) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.NOT_FOUND.getCode())
                 .message(message)
                 .build();
@@ -178,8 +178,8 @@ public class ApiResponse<T> {
     /**
      * 服务器内部错误响应
      */
-    public static <T> ApiResponse<T> internalError() {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> internalError() {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.INTERNAL_ERROR.getCode())
                 .message(ResponseCode.INTERNAL_ERROR.getMessage())
                 .build();
@@ -188,8 +188,8 @@ public class ApiResponse<T> {
     /**
      * 服务器内部错误响应（自定义消息）
      */
-    public static <T> ApiResponse<T> internalError(String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResult<T> internalError(String message) {
+        return ApiResult.<T>builder()
                 .code(ResponseCode.INTERNAL_ERROR.getCode())
                 .message(message)
                 .build();
@@ -200,7 +200,7 @@ public class ApiResponse<T> {
     /**
      * 添加追踪ID
      */
-    public ApiResponse<T> withTraceId(String traceId) {
+    public ApiResult<T> withTraceId(String traceId) {
         this.traceId = traceId;
         return this;
     }
@@ -208,7 +208,7 @@ public class ApiResponse<T> {
     /**
      * 添加元数据
      */
-    public ApiResponse<T> withMeta(Object meta) {
+    public ApiResult<T> withMeta(Object meta) {
         this.meta = meta;
         return this;
     }
@@ -216,7 +216,7 @@ public class ApiResponse<T> {
     /**
      * 添加时间戳
      */
-    public ApiResponse<T> withTimestamp(LocalDateTime timestamp) {
+    public ApiResult<T> withTimestamp(LocalDateTime timestamp) {
         this.timestamp = timestamp;
         return this;
     }

@@ -1,5 +1,9 @@
 package com.xdw.demobackend.entity;
 
+import com.mybatisflex.annotation.Column;
+import com.mybatisflex.annotation.Id;
+import com.mybatisflex.annotation.KeyType;
+import com.mybatisflex.annotation.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,10 +19,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(value = "roles")
 public class Role {
     /**
      * Primary key ID
      */
+    @Id(keyType = KeyType.Auto)
     private Long id;
     
     /**
@@ -39,10 +45,12 @@ public class Role {
     /**
      * Creation timestamp
      */
+    @Column(onInsertValue = "CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;
     
     /**
      * Last update timestamp
      */
+    @Column(onUpdateValue = "CURRENT_TIMESTAMP")
     private LocalDateTime updatedAt;
 }

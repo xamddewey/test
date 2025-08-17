@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS users
 (
     id         SERIAL PRIMARY KEY,                            -- 主键ID
     username   VARCHAR(50)  NOT NULL UNIQUE,                  -- 用户名，唯一
+    nickname   VARCHAR(50)  NOT NULL,                         -- 昵称
+    avatar     VARCHAR(255) DEFAULT NULL,                     -- 头像URL，可选
+    bio        TEXT DEFAULT NULL,                              -- 用户简介，可选
+    phone      VARCHAR(20) DEFAULT NULL,                      -- 手机号码，可选
     password   VARCHAR(255) NOT NULL,                         -- 密码，加密存储
     email      VARCHAR(100) NOT NULL UNIQUE,                  -- 电子邮箱，唯一
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,           -- 创建时间
@@ -39,6 +43,10 @@ COMMENT ON COLUMN roles.updated_at IS '更新时间';
 COMMENT ON TABLE users IS '用户表，存储用户信息';
 COMMENT ON COLUMN users.id IS '主键ID';
 COMMENT ON COLUMN users.username IS '用户名，唯一';
+COMMENT ON COLUMN users.nickname IS '昵称';
+COMMENT ON COLUMN users.avatar IS '头像URL，可选';
+COMMENT ON COLUMN users.bio IS '用户简介，可选';
+COMMENT ON COLUMN users.phone IS '手机号码，可选';
 COMMENT ON COLUMN users.password IS '密码，加密存储';
 COMMENT ON COLUMN users.email IS '电子邮箱，唯一';
 COMMENT ON COLUMN users.created_at IS '创建时间';

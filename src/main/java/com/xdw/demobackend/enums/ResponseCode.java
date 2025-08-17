@@ -43,6 +43,7 @@ public enum ResponseCode {
     TOKEN_INVALID(1102, "令牌无效"),
     LOGIN_REQUIRED(1103, "请先登录"),
     LOGOUT_SUCCESS(1104, "登出成功"),
+    LOGIN_FAILED(1105, "登录失败"),
 
     // 账本相关错误
     BOOK_NOT_FOUND(1201, "账本不存在"),
