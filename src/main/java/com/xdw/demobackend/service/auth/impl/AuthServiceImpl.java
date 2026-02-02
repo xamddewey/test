@@ -4,11 +4,14 @@ import com.xdw.demobackend.dto.auth.JwtResponse;
 import com.xdw.demobackend.dto.auth.LoginRequest;
 import com.xdw.demobackend.dto.auth.RegisterRequest;
 import com.xdw.demobackend.entity.Role;
+import com.xdw.demobackend.entity.RoleDraft;
 import com.xdw.demobackend.entity.User;
+import com.xdw.demobackend.entity.UserDraft;
+import com.xdw.demobackend.entity.UserRoleDraft;
 import com.xdw.demobackend.enums.RoleType;
-import com.xdw.demobackend.mapper.RoleMapper;
-import com.xdw.demobackend.mapper.UserMapper;
-import com.xdw.demobackend.mapper.UserRoleMapper;
+import com.xdw.demobackend.repository.RoleRepository;
+import com.xdw.demobackend.repository.UserRepository;
+import com.xdw.demobackend.repository.UserRoleRepository;
 import com.xdw.demobackend.security.UserPrincipal;
 import com.xdw.demobackend.service.auth.AuthService;
 import com.xdw.demobackend.util.JwtUtils;
@@ -17,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,10 +35,11 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    private final UserMapper userMapper;
-    private final RoleMapper roleMapper;
-    private final UserRoleMapper userRoleMapper;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
     private final AuthenticationManager authenticationManager;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * 用户注册
@@ -46,35 +51,49 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void register(RegisterRequest registerRequest) {
         // 检查用户名是否已经存在
-        if (userMapper.existsByUsername(registerRequest.getUsername())) {
+        if (userRepository.existsByUsername(registerRequest.getUsername())) {
             log.error("用户名已存在: {}", registerRequest.getUsername());
             throw new IllegalArgumentException("用户名已存在");
         }
         // 检查邮箱是否已经存在
-        if (userMapper.existsByEmail(registerRequest.getEmail())) {
+        if (userRepository.existsByEmail(registerRequest.getEmail())) {
             log.error("邮箱已存在: {}", registerRequest.getEmail());
             throw new IllegalArgumentException("邮箱已存在");
         }
 
         // 创建新用户
-        var user = User.builder()
-            .username(registerRequest.getUsername())
-            .email(registerRequest.getEmail())
-            .password(registerRequest.getPassword()) // 密码应加密存储
-            .createdAt(LocalDateTime.now())
-            .updatedAt(LocalDateTime.now())
-            .build();
-        // 保存用户到数据库
-        userMapper.insert(user);
+        User saved = userRepository.insert(
+            UserDraft.$.produce(draft -> {
+                draft.setUsername(registerRequest.getUsername());
+                draft.setNickname(registerRequest.getUsername());
+                draft.setEmail(registerRequest.getEmail());
+                draft.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
+                draft.setCreatedAt(LocalDateTime.now());
+                draft.setUpdatedAt(LocalDateTime.now());
+            })
+        );
 
         // 分配默认角色
-        var role = roleMapper.findByRoleName(RoleType.LEDGER_PARTICIPANT.getName())
+        var role = roleRepository.findByRoleName(RoleType.LEDGER_PARTICIPANT.getName())
             .orElseThrow(() -> new RuntimeException("错误: 默认角色不存在"));
 
-        // 保存用户角色到数据库 
-        userRoleMapper.addUserRole(
-            user.getId(),
-            role.getId()
+        // 保存用户角色到数据库
+        userRoleRepository.insert(
+            UserRoleDraft.$.produce(draft -> {
+                // 创建仅包含ID的User引用，避免级联插入
+                draft.setUser(
+                    UserDraft.$.produce(userDraft -> 
+                        userDraft.setId(saved.id())
+                    )
+                );
+                draft.setRole(
+                    RoleDraft.$.produce(roleDraft -> 
+                        roleDraft.setId(role.id())
+                    )
+                );
+                draft.setCreatedAt(LocalDateTime.now());
+                draft.setUpdatedAt(LocalDateTime.now());
+            })
         );
         log.info("用户注册成功: {}", registerRequest.getUsername());
 
@@ -130,18 +149,18 @@ public class AuthServiceImpl implements AuthService {
             // 重新生成新的JWT令牌
             var newToken = JwtUtils.generateTokenFromUsername(username);
 
-            // 获取用户详细信息
-            var user = userMapper.findByUsername(username)
+            // 获取用户详细信息 - Fetch with associations
+            var user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
-
-            var roles = roleMapper.findByUserId(user.getId()).stream()
-                .map(Role::getRoleName)
-                .toList();
+            
+             var roles = userRoleRepository.findByUserIdWithRoles(user.id()).stream()
+                 .map(userRole -> userRole.role().roleName())
+                 .toList();
 
             return JwtResponse.builder()
                 .token(newToken)
-                .username(user.getUsername())
-                .email(user.getEmail())
+                .username(user.username())
+                .email(user.email())
                 .roles(roles)
                 .build();
         }
