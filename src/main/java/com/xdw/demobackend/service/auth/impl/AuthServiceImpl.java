@@ -40,6 +40,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRoleRepository userRoleRepository;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtils jwtUtils;
 
     /**
      * 用户注册
@@ -117,7 +118,7 @@ public class AuthServiceImpl implements AuthService {
             );
 
         // 生成 JWT 令牌
-        var jwtToken = JwtUtils.generateJwtToken(authentication);
+        var jwtToken = jwtUtils.generateJwtToken(authentication);
 
         // 获取用户详细信息
         var userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -141,13 +142,13 @@ public class AuthServiceImpl implements AuthService {
      * @param token 旧的JWT令牌
      * @return JwtResponse 包含新的JWT令牌和用户信息
      */
-    @Override
+     @Override
     public JwtResponse refreshToken(String token) {
-        if (JwtUtils.validateJwtToken(token)) {
+        if (jwtUtils.validateJwtToken(token)) {
             // 解析JWT令牌获取用户名
-            var username = JwtUtils.getUserNameFromJwtToken(token);
+            var username = jwtUtils.getUserNameFromJwtToken(token);
             // 重新生成新的JWT令牌
-            var newToken = JwtUtils.generateTokenFromUsername(username);
+            var newToken = jwtUtils.generateTokenFromUsername(username);
 
             // 获取用户详细信息 - Fetch with associations
             var user = userRepository.findByUsername(username)

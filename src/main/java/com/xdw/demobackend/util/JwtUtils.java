@@ -20,15 +20,15 @@ import java.util.Date;
 public class JwtUtils {
 
     @Value("${app.jwt.secret}")
-    private static String jwtSecret;
+    private String jwtSecret;
 
     @Value("${app.jwt.expiration}")
-    private static int jwtExpirationMs;
+    private int jwtExpirationMs;
 
     /**
      * 生成JWT令牌
      */
-    public static String generateJwtToken(Authentication authentication) {
+    public String generateJwtToken(Authentication authentication) {
         String username = authentication.getName();
         return generateTokenFromUsername(username);
     }
@@ -36,7 +36,7 @@ public class JwtUtils {
     /**
      * 根据用户名生成JWT令牌
      */
-    public static String generateTokenFromUsername(String username) {
+    public String generateTokenFromUsername(String username) {
         return Jwts.builder()
             .subject(username)
             .issuedAt(new Date())
@@ -48,7 +48,7 @@ public class JwtUtils {
     /**
      * 从JWT令牌中获取用户名
      */
-    public static String getUserNameFromJwtToken(String token) {
+    public String getUserNameFromJwtToken(String token) {
         return Jwts.parser()
             .verifyWith(getSigningKey())
             .build()
@@ -60,7 +60,7 @@ public class JwtUtils {
     /**
      * 验证JWT令牌
      */
-    public static boolean validateJwtToken(String authToken) {
+    public boolean validateJwtToken(String authToken) {
         try {
             Jwts.parser()
                 .verifyWith(getSigningKey())
@@ -82,7 +82,7 @@ public class JwtUtils {
     /**
      * 获取签名密钥
      */
-    private static SecretKey getSigningKey() {
+    private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
