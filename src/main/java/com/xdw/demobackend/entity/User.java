@@ -1,76 +1,82 @@
 package com.xdw.demobackend.entity;
 
-import com.mybatisflex.annotation.Column;
-import com.mybatisflex.annotation.Id;
-import com.mybatisflex.annotation.KeyType;
-import com.mybatisflex.annotation.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import org.babyfish.jimmer.sql.*;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * User entity class
+ * User entity interface
  * Corresponds to the users table in the database
+ * 
+ * Jimmer entities are immutable interfaces with getter methods.
+ * Jimmer generates implementations via jimmer-apt annotation processor.
  */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@Table("users")
-public class User {
+@Entity
+@Table(name = "users")
+public interface User {
     /**
-     * Primary key ID
+     * Primary key ID - auto-generated
      */
-    @Id(keyType = KeyType.Auto)
-    private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    long id();
 
     /**
      * Username, unique
      */
-    private String username;
+    String username();
 
     /**
      * Nickname
      */
-    private String nickname;
+    String nickname();
 
     /**
      * Avatar URL, optional
      */
-    private String avatar;
+    @Nullable
+    String avatar();
 
     /**
      * User bio/introduction, optional
      */
-    private String bio;
+    @Nullable
+    String bio();
 
     /**
      * Phone number, optional
      */
-    private String phone;
+    @Nullable
+    String phone();
 
     /**
      * Password, stored encrypted
      */
-    private String password;
+    String password();
 
     /**
      * Email address, unique
      */
-    private String email;
+    String email();
+
+     /**
+      * Creation timestamp
+      */
+     @Nullable
+     LocalDateTime createdAt();
+
+     /**
+      * Last update timestamp
+      */
+     @Nullable
+     LocalDateTime updatedAt();
 
     /**
-     * Creation timestamp
+     * User role assignments (inverse side of UserRole.user relationship)
+     * Mapped by "user" property on UserRole entity
      */
-    @Column(onInsertValue = "CURRENT_TIMESTAMP")
-    private LocalDateTime createdAt;
-
-    /**
-     * Last update timestamp
-     */
-    @Column(onUpdateValue = "CURRENT_TIMESTAMP")
-    private LocalDateTime updatedAt;
+    @OneToMany(mappedBy = "user")
+    List<UserRole> userRoles();
 }

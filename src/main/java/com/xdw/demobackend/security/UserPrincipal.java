@@ -35,18 +35,18 @@ public class UserPrincipal implements UserDetails {
      * @param roles 用户角色列表
      * @return UserPrincipal实例
      */
-    public static UserPrincipal create(User user, List<String> roles) {
-        var authorities = roles.stream()
-            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-            .toList();
-        return new UserPrincipal(
-            user.getId(),
-            user.getUsername(),
-            user.getEmail(),
-            user.getPassword(),
-            authorities
-        );
-    }
+     public static UserPrincipal create(User user, List<String> roles) {
+         var authorities = roles.stream()
+             .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+             .toList();
+         return new UserPrincipal(
+             user.id(),
+             user.username(),
+             user.email(),
+             user.password(),
+             authorities
+         );
+     }
 
     /**
      * 获取用户权限列表

@@ -1,56 +1,57 @@
 package com.xdw.demobackend.entity;
 
-import com.mybatisflex.annotation.Column;
-import com.mybatisflex.annotation.Id;
-import com.mybatisflex.annotation.KeyType;
-import com.mybatisflex.annotation.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import org.babyfish.jimmer.sql.*;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * Role entity class
+ * Role entity interface
  * Corresponds to the roles table in the database
  */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@Table(value = "roles")
-public class Role {
+@Entity
+@Table(name = "roles")
+public interface Role {
     /**
      * Primary key ID
      */
-    @Id(keyType = KeyType.Auto)
-    private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    long id();
     
     /**
      * Role name, unique
      */
-    private String roleName;
+    String roleName();
     
     /**
      * Role description
      */
-    private String description;
+    @Nullable
+    String description();
     
     /**
      * Role type: ADMIN or USER
      */
-    private String roleType;
+    String roleType();
     
+     /**
+      * Creation timestamp
+      */
+     @Nullable
+     LocalDateTime createdAt();
+     
+     /**
+      * Last update timestamp
+      */
+     @Nullable
+     LocalDateTime updatedAt();
+
     /**
-     * Creation timestamp
+     * Role assignments (inverse side of UserRole.role relationship)
+     * Mapped by "role" property on UserRole entity
      */
-    @Column(onInsertValue = "CURRENT_TIMESTAMP")
-    private LocalDateTime createdAt;
-    
-    /**
-     * Last update timestamp
-     */
-    @Column(onUpdateValue = "CURRENT_TIMESTAMP")
-    private LocalDateTime updatedAt;
+    @OneToMany(mappedBy = "role")
+    List<UserRole> userRoles();
 }

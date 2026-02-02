@@ -32,6 +32,11 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
+
+    /**
+     * 认证入口点 AuthEntryPointJwt 类实现 AuthenticationEntryPoint 接口 用于处理未授权访问的情况
+     * 当用户未通过认证时，Spring Security 会调用此类的 commence 方法 该方法会记录日志并返回一个 JSON 响应，包含错误信息和状态码
+     */
     private final AuthEntryPointJwt unauthorizedHandler;
     private final AuthTokenFilter authTokenFilter;
     @Value("${app.cors.allowed-origins:http://localhost:3000}")
@@ -40,6 +45,7 @@ public class SecurityConfig {
     /**
      * 密码编码器
      * 使用BCrypt加密算法对密码进行加密存储
+     *
      * @return PasswordEncoder 实例
      */
     @Bean

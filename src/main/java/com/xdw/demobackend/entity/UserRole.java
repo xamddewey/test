@@ -1,44 +1,51 @@
 package com.xdw.demobackend.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import org.babyfish.jimmer.sql.*;
+import org.jetbrains.annotations.Nullable;
 import java.time.LocalDateTime;
 
 /**
- * UserRole entity class
+ * UserRole entity interface
  * Corresponds to the user_roles table in the database
  * Represents the many-to-many relationship between users and roles
+ * 
+ * This is an explicit join entity (not @ManyToMany) to preserve audit timestamps
+ * (createdAt, updatedAt).
  */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class UserRole {
+@Entity
+@Table(name = "user_roles")
+public interface UserRole {
     /**
      * Primary key ID
      */
-    private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    long id();
     
     /**
-     * User ID, references User entity
+     * Associated User entity (owning side of the relationship)
+     * Foreign key references the users table
      */
-    private Long userId;
+    @ManyToOne
+    User user();
     
     /**
-     * Role ID, references Role entity
+     * Associated Role entity (owning side of the relationship)
+     * Foreign key references the roles table
+     * Eagerly loaded to prevent "unloaded property" errors
      */
-    private Long roleId;
+    @ManyToOne
+    Role role();
     
-    /**
-     * Creation timestamp
-     */
-    private LocalDateTime createdAt;
-    
-    /**
-     * Last update timestamp
-     */
-    private LocalDateTime updatedAt;
+     /**
+      * Creation timestamp
+      */
+     @Nullable
+     LocalDateTime createdAt();
+     
+     /**
+      * Last update timestamp
+      */
+     @Nullable
+     LocalDateTime updatedAt();
 }

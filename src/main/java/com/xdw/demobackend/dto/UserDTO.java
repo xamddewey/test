@@ -30,12 +30,12 @@ public class UserDTO {
      * @param user the User entity
      * @param roles the list of Role entities associated with the user
      */
-    public UserDTO(User user, List<Role> roles) {
-        this.id = user.getId();
-        this.username = user.getUsername();
-        this.email = user.getEmail();
-        this.roles = roles.stream()
-                .map(Role::getRoleName)
-                .collect(Collectors.toList());
-    }
+     public UserDTO(User user, List<Role> roles) {
+         this.id = user.id();
+         this.username = user.username();
+         this.email = user.email();
+         this.roles = roles.stream()
+                 .map(Role::roleName)
+                 .collect(Collectors.toList());
+     }
 }
