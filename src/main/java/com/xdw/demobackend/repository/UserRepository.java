@@ -2,6 +2,7 @@ package com.xdw.demobackend.repository;
 
 import com.xdw.demobackend.entity.User;
 import org.babyfish.jimmer.spring.repository.JRepository;
+import org.babyfish.jimmer.sql.fetcher.Fetcher;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -36,4 +37,15 @@ public interface UserRepository extends JRepository<User, Long> {
      * Spring Data method name convention - Jimmer auto-implements
      */
     boolean existsByEmail(String email);
+    
+    /**
+     * Find user by username with eager-loaded roles
+     * Uses Jimmer Fetcher API to load associated user roles in a single optimized query
+     * Prevents N+1 queries and UnloadedException errors
+     * 
+     * @param fetcher The Fetcher instance specifying which associations to load
+     * @param username The username to search for
+     * @return Optional containing the User with loaded roles, or empty if not found
+     */
+    Optional<User> findByUsername(Fetcher<User> fetcher, String username);
 }
