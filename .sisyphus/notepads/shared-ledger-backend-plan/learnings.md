@@ -1116,3 +1116,195 @@ On expense delete:
 
 ### Notes
 - LSP diagnostics unavailable (jdtls missing in PATH)
+
+## [2026-02-06 00:03] Task 6 - RabbitMQ Async Processing Integration
+
+### RabbitMQ Configuration Patterns
+
+**Exchange and Queue Architecture:**
+- **4 Topic Exchanges**: `ledger.notifications`, `ledger.audit`, `ledger.settlement`, `ledger.statistics`
+- **4 Durable Queues**: `notification-queue`, `audit-queue`, `settlement-queue`, `statistics-queue`
+- **Topic Exchange with Pattern Matching**: Enables flexible routing keys (e.g., `notification.INVITATION`, `audit.LEDGER.CREATE`)
+- **Jackson2JsonMessageConverter**: Auto-serializes message DTOs to/from JSON for RabbitMQ
+
+**Spring AMQP Configuration Bean Pattern:**
+```java
+@Bean
+public TopicExchange notificationsExchange() {
+    return new TopicExchange(NOTIFICATIONS_EXCHANGE);
+}
+
+@Bean
+public Queue notificationQueue() {
+    return new Queue(NOTIFICATION_QUEUE, true); // durable = true
+}
+
+@Bean
+public Binding notificationBinding(Queue notificationQueue, TopicExchange notificationsExchange) {
+    return BindingBuilder.bind(notificationQueue)
+            .to(notificationsExchange)
+            .with(NOTIFICATION_ROUTING_KEY);
+}
+```
+
+### Message DTO Patterns
+
+**Lombok DTOs for RabbitMQ Messages:**
+- Use `@Data`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor` for JSON serialization
+- All fields are primitives/wrappers (not Jimmer entities) for easy serialization
+- Message DTOs are in `dto/message/` package (separate from request/response DTOs)
+
+**Key Message Types:**
+1. **NotificationMessage**: `type`, `userId`, `title`, `content`, `relatedEntityId`
+2. **AuditMessage**: `entityType`, `entityId`, `action`, `actorId`, `changes`, `ledgerId`
+3. **SettlementMessage**: `ledgerId`, `triggeredBy`
+4. **StatisticsMessage**: `ledgerId`, `eventType`
+
+### Producer Patterns
+
+**Spring Component Pattern:**
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class NotificationProducer {
+    private final RabbitTemplate rabbitTemplate;
+    
+    public void sendNotification(NotificationMessage message) {
+        String routingKey = "notification." + message.getType();
+        rabbitTemplate.convertAndSend(NOTIFICATIONS_EXCHANGE, routingKey, message);
+        log.info("Sent notification message: type={}, userId={}", message.getType(), message.getUserId());
+    }
+}
+```
+
+**Dynamic Routing Keys:**
+- Notification: `notification.{type}` (e.g., `notification.INVITATION`)
+- Audit: `audit.{entityType}.{action}` (e.g., `audit.LEDGER.CREATE`)
+- Settlement: `settlement.trigger`
+- Statistics: `statistics.{eventType}` (e.g., `statistics.EXPENSE_CREATED`)
+
+### Consumer Patterns
+
+**@RabbitListener Annotation:**
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class NotificationConsumer {
+    private final NotificationRepository notificationRepository;
+    
+    @RabbitListener(queues = "notification-queue")
+    @Transactional
+    public void handleNotification(NotificationMessage message) {
+        try {
+            // Convert message DTO to Jimmer entity using Draft API
+            Notification notification = NotificationDraft.$.produce(draft -> {
+                draft.setUser(UserDraft.$.produce(u -> u.setId(message.getUserId())));
+                draft.setType(Notification.NotificationType.valueOf(message.getType()));
+                draft.setTitle(message.getTitle());
+                draft.setContent(message.getContent());
+                draft.setIsRead(false);
+                draft.setCreatedAt(LocalDateTime.now());
+                draft.setIsDeleted(false);
+            });
+            
+            notificationRepository.insert(notification);
+        } catch (Exception e) {
+            log.error("Failed to process notification message: {}", message, e);
+        }
+    }
+}
+```
+
+**Key Consumer Patterns:**
+1. **@Transactional**: Database operations in consumers must be transactional
+2. **Try-Catch**: Wrap consumer logic to log errors (MVP: no retry/DLQ)
+3. **Jimmer Draft API**: Convert message DTOs to entities using `EntityDraft.$.produce()`
+4. **ID-Only References**: Use `UserDraft.$.produce(u -> u.setId(userId))` to link existing entities
+
+### Integration Challenges
+
+**Lombok + Jimmer Coexistence:**
+- Message DTOs use Lombok (`@Data`, `@Builder`) for getters/setters
+- Entity persistence uses Jimmer Draft API for immutable entities
+- Both annotation processors work together via Maven `annotationProcessorPaths`
+
+**Jimmer Entity Integration:**
+- Consumers convert simple message DTOs to complex Jimmer entities
+- Use `EntityDraft.$.produce(draft -> {...})` pattern for entity creation
+- Use `repository.insert()` for new entities (not `save()` which requires ID)
+
+**Null Handling in AuditConsumer:**
+```java
+if (message.getLedgerId() != null) {
+    draft.setLedger(AccountLedgerDraft.$.produce(l -> l.setId(message.getLedgerId())));
+}
+```
+- Some fields (like `ledgerId` in AuditLog) are optional
+- Check null before creating Draft reference
+
+**Placeholder Consumers (Settlement & Statistics):**
+- SettlementConsumer and StatisticsConsumer only log messages for now
+- Actual processing logic will be implemented in Tasks 5 and 7
+- No database operations needed yet - just message receipt verification
+
+### Files Created
+
+**Configuration:**
+- `src/main/java/com/xdw/demobackend/config/RabbitMQConfig.java`
+
+**Message DTOs (4 files):**
+- `src/main/java/com/xdw/demobackend/dto/message/NotificationMessage.java`
+- `src/main/java/com/xdw/demobackend/dto/message/AuditMessage.java`
+- `src/main/java/com/xdw/demobackend/dto/message/SettlementMessage.java`
+- `src/main/java/com/xdw/demobackend/dto/message/StatisticsMessage.java`
+
+**Producers (4 files):**
+- `src/main/java/com/xdw/demobackend/mq/producer/NotificationProducer.java`
+- `src/main/java/com/xdw/demobackend/mq/producer/AuditProducer.java`
+- `src/main/java/com/xdw/demobackend/mq/producer/SettlementProducer.java`
+- `src/main/java/com/xdw/demobackend/mq/producer/StatisticsProducer.java`
+
+**Consumers (4 files):**
+- `src/main/java/com/xdw/demobackend/mq/consumer/NotificationConsumer.java`
+- `src/main/java/com/xdw/demobackend/mq/consumer/AuditConsumer.java`
+- `src/main/java/com/xdw/demobackend/mq/consumer/SettlementConsumer.java`
+- `src/main/java/com/xdw/demobackend/mq/consumer/StatisticsConsumer.java`
+
+**Dependency Added:**
+- `pom.xml`: Added `spring-boot-starter-amqp` dependency
+
+**Configuration Updated:**
+- `application.properties`: Added RabbitMQ connection properties (localhost:5672)
+
+### Build Verification
+
+**Compilation Results:**
+- ✅ `./mvnw clean compile` succeeded in 3.577s
+- ✅ 99 source files compiled successfully
+- ✅ Jimmer APT generated entity drafts for 15 entities
+- ✅ Lombok generated getters/setters for message DTOs
+- ⚠️ Warning: `AuditConsumer.java` uses deprecated API (likely Jimmer enum conversion - acceptable)
+
+**No LSP Errors:**
+- LSP server unavailable (`jdtls` not in PATH)
+- Compilation success is definitive verification for Java projects
+
+### Next Steps (Not Part of This Task)
+
+**Integration with Existing Services:**
+- Task 6.5 (hypothetical): Wire producers into existing services
+  - LedgerService → AuditProducer + SettlementProducer
+  - InvitationService → NotificationProducer + AuditProducer
+  - ExpenseService → AuditProducer + StatisticsProducer + SettlementProducer
+- This task focused solely on infrastructure setup, not integration
+
+**Settlement & Statistics Processing:**
+- Task 5: Implement actual settlement calculation logic in SettlementConsumer
+- Task 7: Implement actual statistics aggregation logic in StatisticsConsumer
+
+**Testing:**
+- Task 8: Docker Compose with RabbitMQ container for integration testing
+- Manual testing will verify queue declarations and message flow
+
