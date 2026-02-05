@@ -1065,5 +1065,54 @@ On expense delete:
   - Update expense participants (soft delete old + create new)
   - Delete expense (verify counter reversal)
   - Category usage tracking
-  - Balance calculation accuracy
+- Balance calculation accuracy
 
+## [2026-02-05T15:56:30.000Z] Task 5 - Settlement Algorithm & REST API
+
+### Files Created
+**Algorithm (1 file):**
+- SettlementAlgorithm.java - Greedy minimum-transfer calculation
+
+**DTOs (4 files):**
+- TransferDTO.java - Transfer record (payer/receiver/amount)
+- SettlementCalculationResponse.java - Calculation result summary
+- CreateSettlementRequest.java - Request validation for settlement creation
+- SettlementResponse.java - Settlement response mapping
+
+**Services (2 files):**
+- SettlementService.java - Interface for settlement operations
+- SettlementServiceImpl.java - Business logic implementation
+
+**Controllers (1 file):**
+- SettlementController.java - REST endpoints for settlements
+
+### Algorithm Details
+- Greedy approach: sort creditors/debtors, pair largest values
+- Time complexity: O(N log N) due to sorting
+- Space complexity: O(N)
+- Handles zero balances by filtering them out
+
+### Business Rules Implemented
+- Only ledger members can calculate or create settlements
+- Payer and receiver must be different and JOINED members
+- Settlement status must be PENDING before completion
+- Payer or receiver can mark settlement as complete
+- Balance updates on completion:
+  - Payer balance += amount
+  - Receiver balance -= amount
+- Redundant fields (ledgerName, payerNickname, receiverNickname) auto-populated
+- Amount stored with scale(2) and RoundingMode.DOWN
+
+### API Endpoints Added
+**SettlementController (`/api/settlements`):**
+- `GET /calculate/{ledgerId}` - Calculate minimum transfers (read-only)
+- `POST /` - Create settlement record
+- `POST /{settlementId}/complete` - Mark settlement as completed
+- `GET /ledger/{ledgerId}` - Get ledger settlements (optional status)
+- `GET /my` - Get current user's settlements (optional status)
+
+### Compilation
+- `./mvnw clean compile`: SUCCESS
+
+### Notes
+- LSP diagnostics unavailable (jdtls missing in PATH)

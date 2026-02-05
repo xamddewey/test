@@ -16,8 +16,7 @@ import java.util.Objects;
  * UserPrincipal class implements UserDetails interface
  * Represents the authenticated user in the security context
  */
-@Data
-@AllArgsConstructor
+    @Data
 public class UserPrincipal implements UserDetails {
     private Long id;
     private String username;
@@ -47,6 +46,20 @@ public class UserPrincipal implements UserDetails {
              authorities
          );
      }
+
+    public UserPrincipal(
+            Long id,
+            String username,
+            String email,
+            String password,
+            Collection<? extends GrantedAuthority> authorities
+    ) {
+        this.id = id;
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.authorities = authorities;
+    }
 
     /**
      * 获取用户权限列表
@@ -86,6 +99,10 @@ public class UserPrincipal implements UserDetails {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    public Long getId() {
+        return id;
     }
 
     @Override
