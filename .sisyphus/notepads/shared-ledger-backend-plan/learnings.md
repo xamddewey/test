@@ -1308,3 +1308,181 @@ if (message.getLedgerId() != null) {
 - Task 8: Docker Compose with RabbitMQ container for integration testing
 - Manual testing will verify queue declarations and message flow
 
+
+## [2026-02-06 00:09] Task 7 - Statistics API Implementation
+
+### Files Created
+**DTOs (5 files):**
+- CategoryStatisticsResponse.java - Category aggregation with totalAmount, expenseCount
+- MemberStatisticsResponse.java - Member financial stats (totalPaid, totalShared, balance)
+- TimeRangeStatisticsResponse.java - Time-bucketed aggregation with periodLabel
+- OverallStatisticsResponse.java - Dashboard view combining all dimensions
+- StatisticsRequest.java - Request DTO with TimeGranularity enum (WEEK/MONTH/CUSTOM)
+
+**Services (2 files):**
+- StatisticsService.java - Interface with 4 query methods
+- StatisticsServiceImpl.java - Implementation using Jimmer SQL DSL + repository queries
+
+**Controllers (1 file):**
+- StatisticsController.java - REST endpoints for statistics queries
+
+### Jimmer SQL DSL Aggregation Patterns
+
+**Basic GROUP BY with SUM and COUNT:**
+```java
+ExpenseRecordTable expense = Tables.EXPENSE_RECORD_TABLE;
+
+List<Tuple3<String, BigDecimal, Long>> results = sqlClient
+    .createQuery(expense)
+    .where(expense.ledgerId().eq(ledgerId))
+    .where(expense.isDeleted().eq(false))
+    .whereIf(startDate != null, () -> expense.expenseDate().ge(startDate))
+    .whereIf(endDate != null, () -> expense.expenseDate().le(endDate))
+    .groupBy(expense.categoryName())
+    .select(
+        expense.categoryName(),
+        expense.amount().sum(),
+        expense.count()
+    )
+    .execute();
+```
+
+**Key Jimmer Query Features Used:**
+1. `whereIf(condition, supplier)` - Conditional where clauses (null-safe filtering)
+2. `.groupBy(field)` - SQL GROUP BY clause
+3. `.sum()`, `.count()` - Aggregate functions
+4. `Tuple3<A, B, C>` - Type-safe tuple results (access with `.get_1()`, `.get_2()`, `.get_3()`)
+5. Association navigation: `participant.record().ledgerId()` - Join through @ManyToOne
+
+### Statistics Query Strategies
+
+**Category Statistics:**
+- Direct aggregation on ExpenseRecord table
+- GROUP BY categoryName, SUM(amount), COUNT(*)
+- Sort by totalAmount DESC (most expensive first)
+
+**Member Statistics:**
+- **Two separate queries:**
+  1. Payment stats: GROUP BY payerId on ExpenseRecord
+  2. Sharing stats: GROUP BY userId on ExpenseParticipant
+- Combine results in memory: balance = totalPaid - totalShared
+- Include all JOINED members (even with zero activity)
+
+**Time Range Statistics:**
+- **Hybrid approach:** Query all expenses, then group in Java
+- Date filtering in repository query, then stream filtering
+- Period formatting:
+  - WEEK: `IsoFields.WEEK_OF_WEEK_BASED_YEAR` → "2026-W06"
+  - MONTH: `DateTimeFormatter.ofPattern("yyyy-MM")` → "2026-02"
+  - CUSTOM: Single bucket labeled "Custom Range"
+
+### Lambda Variable Scope Issues
+
+**Problem:** Cannot reference non-final variables in lambda
+```java
+if (granularity == null) {
+    granularity = StatisticsRequest.TimeGranularity.MONTH;
+}
+// Later in lambda: formatPeriod(date, granularity) ❌ Error!
+```
+
+**Solution:** Create final wrapper variables
+```java
+StatisticsRequest.TimeGranularity finalGranularity = granularity != null ? 
+    granularity : StatisticsRequest.TimeGranularity.MONTH;
+LocalDate finalStartDate = startDate;
+LocalDate finalEndDate = endDate;
+
+// Now safe to use in lambda:
+.filter(e -> {
+    if (finalStartDate != null && e.expenseDate().isBefore(finalStartDate)) return false;
+    return true;
+})
+```
+
+### Time Period Formatting
+
+**ISO Week Calculation:**
+```java
+int year = date.get(IsoFields.WEEK_BASED_YEAR);
+int week = date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+return String.format("%d-W%02d", year, week);  // "2026-W06"
+```
+
+**Month Formatting:**
+```java
+return date.format(DateTimeFormatter.ofPattern("yyyy-MM"));  // "2026-02"
+```
+
+### API Endpoints Implemented
+
+**StatisticsController (`/api/statistics`):**
+1. `GET /by-category?ledgerId=X&startDate=...&endDate=...`
+2. `GET /by-member?ledgerId=X&startDate=...&endDate=...`
+3. `GET /by-time?ledgerId=X&granularity=WEEK&startDate=...&endDate=...`
+4. `GET /overall?ledgerId=X&granularity=MONTH&startDate=...&endDate=...`
+
+**Query Parameters:**
+- `ledgerId` (required)
+- `startDate`, `endDate` (optional) - `@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)`
+- `granularity` (defaultValue = "MONTH") - Enum converter handles strings
+
+### Permission Validation
+
+**Member-only access:**
+```java
+private void validateMembership(Long ledgerId, Long userId) {
+    LedgerMember member = ledgerMemberRepository
+        .findByLedgerIdAndUserIdAndIsDeletedFalse(ledgerId, userId)
+        .orElseThrow(() -> new RuntimeException("您不是该账本成员"));
+    
+    if (member.joinStatus() != LedgerMember.JoinStatus.JOINED) {
+        throw new RuntimeException("只有已加入的成员才能查看统计");
+    }
+}
+```
+
+### Repository vs DSL Query Trade-offs
+
+**Used Jimmer DSL for:**
+- Category statistics (simple GROUP BY)
+- Payment stats (GROUP BY payerId)
+- Sharing stats (GROUP BY userId with join)
+
+**Used Repository + Stream API for:**
+- Time range statistics (complex Java-side grouping)
+
+**Rationale:**
+- Jimmer DSL excellent for simple aggregations
+- Java streams better for complex date grouping (ISO weeks, year-months)
+- Hybrid approach balances SQL power with Java flexibility
+
+### Compilation Results
+- **Status:** BUILD SUCCESS
+- **Time:** 3.706s
+- **Files compiled:** 107 source files
+- **Warnings:** 2 (pre-existing in JwtResponse and UserPrincipal)
+- **Errors:** 0
+
+### Key Learnings
+
+1. **Jimmer Tuple Results:** Use `Tuple2`, `Tuple3` for multi-column aggregations. Access with `.get_1()`, `.get_2()`, `.get_3()`.
+
+2. **Conditional Where Clauses:** `whereIf(condition, supplier)` is idiomatic Jimmer for null-safe filtering (better than manual if-else).
+
+3. **Association Navigation:** Jimmer's `participant.record().ledgerId()` automatically joins tables - no explicit JOIN needed.
+
+4. **Lambda Variable Scope:** Always create `final` wrapper variables for method parameters used in lambdas.
+
+5. **ISO Week Calculation:** Use `IsoFields.WEEK_BASED_YEAR` and `IsoFields.WEEK_OF_WEEK_BASED_YEAR` (not `WeekFields.ISO`).
+
+6. **Null-safe Aggregation:** Default BigDecimal sums to ZERO, default Long counts to 0L when no data exists.
+
+7. **Sorted Results:** Sort aggregation results DESC by amount for better UX (most expensive first).
+
+### Testing TODO (Out of Scope for This Task)
+- Integration tests with sample expense data
+- Verify ISO week boundaries (year transitions)
+- Verify CUSTOM range with null startDate/endDate
+- Concurrent statistics queries under load
+
