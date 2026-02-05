@@ -924,3 +924,146 @@ public class LedgerController {
 - Permission boundary tests (non-member access)
 - Concurrent invitation handling
 - Redundant field consistency verification
+
+## [2026-02-05T23:40] Task 4 - Expense Entry & Category Management API
+
+### Files Created
+**DTOs (6 files):**
+- CreateExpenseRequest.java - Request for creating expense with participants list
+- UpdateExpenseRequest.java - Request for updating expense (all fields optional)
+- ExpenseResponse.java - Response with nested ParticipantResponse
+- ParticipantRequest.java - Individual participant with userId and amount
+- CategoryRequest.java - Request for creating custom category
+- CategoryResponse.java - Category response with usage count
+
+**Services (4 files):**
+- ExpenseService.java - Interface with CRUD + pagination methods
+- ExpenseServiceImpl.java - Implementation with extensive counter updates
+- CategoryService.java - Interface for category management
+- CategoryServiceImpl.java - Implementation with ledger-category associations
+
+**Controllers (2 files):**
+- ExpenseController.java - REST endpoints for expense CRUD
+- CategoryController.java - REST endpoints for category management
+
+### Key Implementation Patterns
+
+#### 1. Equal Split Calculation
+```java
+BigDecimal avgAmount = amount.divide(
+    BigDecimal.valueOf(participantCount), 2, RoundingMode.HALF_UP);
+```
+- User provides exact split amounts in request
+- Validation: participant amounts must sum to total amount
+- avgAmount stored for redundancy (calculated from total/count)
+
+#### 2. Extensive Counter Updates
+When creating expense, update:
+- **AccountLedger**: totalExpenses, recordCount, lastExpenseDate, lastActivityAt
+- **LedgerMember (payer)**: totalPaid, recordCount, balance, lastActivityAt
+- **LedgerMember (participants)**: totalShared, balance, lastActivityAt
+- **LedgerCategory**: usageCount
+- **ExpenseCategory**: usageCount
+
+#### 3. Balance Calculation
+```java
+balance = totalPaid - totalShared
+```
+- Positive balance = others owe them money
+- Negative balance = they owe others money
+- Updated atomically with totalPaid/totalShared changes
+
+#### 4. JSON Serialization for participantsInfo
+```java
+List<Map<String, Object>> participantsInfo = new ArrayList<>();
+// Build list...
+String participantsInfoJson = objectMapper.writeValueAsString(participantsInfo);
+```
+- Redundant field for quick display without JOIN
+- Fallback to "[]" on serialization error
+
+#### 5. Redundant Field Population
+Auto-populate on create:
+- ledgerName, categoryName, payerNickname, creatorNickname
+- participantCount, avgAmount, participantsInfo
+- For ExpenseParticipant: userNickname, expenseAmount, expenseDate, ledgerId, categoryName
+
+#### 6. Lambda Variable Scope Issues
+**Problem**: Variables used in lambdas must be effectively final
+**Solution**: Extract computed values before lambda
+```java
+BigDecimal newPayerTotalPaid = (payerMember.totalPaid() != null ? 
+    payerMember.totalPaid() : BigDecimal.ZERO).add(request.getAmount());
+BigDecimal payerTotalShared = payerMember.totalShared() != null ? 
+    payerMember.totalShared() : BigDecimal.ZERO;
+
+LedgerMember updatedPayerMember = LedgerMemberDraft.$.produce(payerMember, draft -> {
+    draft.setTotalPaid(newPayerTotalPaid);
+    draft.setBalance(newPayerTotalPaid.subtract(payerTotalShared));
+});
+```
+
+### Business Logic Highlights
+
+#### Permission Checks
+- Any JOINED member can create/edit/delete expenses
+- Must be ledger member to view expenses
+- Only JOINED members can add/remove categories from ledger
+
+#### Validation Rules
+- All participants must be ledger members with JOINED status
+- Participant amounts must sum exactly to total amount
+- Category must be added to ledger before use in expense
+- Cannot remove category from ledger if usageCount > 0
+
+#### Category Types
+- **System categories** (is_system=true): Pre-defined, cannot be deleted
+- **Default categories** (is_default=true): Auto-added to new ledgers
+- **Custom categories** (is_system=false): User-created per ledger
+
+#### Soft Delete with Counter Reversal
+On expense delete:
+- Set isDeleted=true, deletedAt=now
+- Reverse all counters (subtract amounts, decrement counts)
+- Update balances for payer and all participants
+- Soft delete all ExpenseParticipant records
+
+### API Endpoints Implemented
+
+**ExpenseController** (`/api/expenses`):
+- `POST /` - Create expense (requires JOINED member)
+- `GET /{expenseId}` - Get expense by ID
+- `GET /ledger/{ledgerId}` - Get ledger expenses (with optional pagination)
+- `PUT /{expenseId}` - Update expense (any member can edit)
+- `DELETE /{expenseId}` - Soft delete expense
+
+**CategoryController** (`/api/categories`):
+- `POST /` - Create custom category
+- `GET /system` - Get system categories
+- `GET /ledger/{ledgerId}` - Get ledger categories
+- `POST /ledger/{ledgerId}/add?categoryId=X` - Add category to ledger
+- `DELETE /ledger/{ledgerId}/category/{categoryId}` - Remove from ledger
+
+### Compilation Success
+- **Command**: `./mvnw clean compile`
+- **Result**: BUILD SUCCESS (3.378s)
+- **Entities processed**: 15 Jimmer entities (ExpenseRecord, ExpenseParticipant, etc.)
+- **Warnings**: 2 (pre-existing in JwtResponse and UserPrincipal)
+- **Generated files**: Jimmer APT generated Draft/Fetcher/Table classes
+
+### Technical Challenges & Solutions
+
+1. **Lambda variable scope errors**: Fixed by extracting computed values before lambda blocks
+2. **Final variable assignment in try-catch**: Created finalParticipantsInfoJson wrapper
+3. **Complex balance recalculation**: Moved to single lambda instead of chained produce() calls
+4. **Participant amount validation**: Validate sum equals total before creating expense
+
+### Testing Notes
+- No unit tests created (out of scope for this task)
+- Manual testing required for:
+  - Create expense with multiple participants
+  - Update expense participants (soft delete old + create new)
+  - Delete expense (verify counter reversal)
+  - Category usage tracking
+  - Balance calculation accuracy
+
