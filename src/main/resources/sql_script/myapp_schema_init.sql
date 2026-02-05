@@ -266,6 +266,51 @@ CREATE INDEX idx_payer_id_settlements ON settlements (payer_id);       -- 付款
 CREATE INDEX idx_receiver_id ON settlements (receiver_id);             -- 收款人ID索引
 CREATE INDEX idx_status_amount ON settlements (status, amount);        -- 复合索引，支持按状态和金额查询
 
+-- 通知表，用于推送消息给用户（支持多种通知类型、已读/未读状态、6个月自动清理）
+CREATE TABLE IF NOT EXISTS notifications
+(
+    id          SERIAL PRIMARY KEY,                          -- 主键ID
+    user_id     BIGINT         NOT NULL,                     -- 接收者用户ID，关联users表的id
+    type        VARCHAR(20) CHECK (type IN ('INVITATION', 'SYSTEM', 'SETTLEMENT')) NOT NULL, -- 通知类型：邀请、系统、结算
+    title       VARCHAR(255)   NOT NULL,                     -- 通知标题
+    content     TEXT,                                        -- 通知内容
+    is_read     BOOLEAN DEFAULT FALSE,                       -- 是否已读
+    read_at     TIMESTAMP,                                   -- 读取时间
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,         -- 创建时间
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,         -- 更新时间
+    is_deleted  BOOLEAN DEFAULT FALSE,                       -- 是否已逻辑删除（用户可手动删除）
+    deleted_at  TIMESTAMP,                                   -- 逻辑删除时间
+    
+    -- 【数据冗余优化】新增冗余字段，避免关联查询
+    user_nickname VARCHAR(50)                                -- 冗余接收者昵称，避免关联users表查询
+);
+CREATE INDEX idx_user_id_notifications ON notifications (user_id);          -- 用户ID索引，支持按用户查询
+CREATE INDEX idx_is_read ON notifications (is_read);                        -- 已读状态索引，支持按已读/未读查询
+CREATE INDEX idx_created_at_notifications ON notifications (created_at);    -- 创建时间索引，支持按时间排序和6月清理
+CREATE INDEX idx_notification_type ON notifications (type);                 -- 通知类型索引，支持按类型筛选
+CREATE INDEX idx_user_unread ON notifications (user_id, is_read);           -- 复合索引，支持查询用户未读通知
+
+-- 审计日志表，记录账本、成员、条目、结算等操作的审计记录（不可修改，仅增不删）
+CREATE TABLE IF NOT EXISTS audit_logs
+(
+    id          SERIAL PRIMARY KEY,                          -- 主键ID
+    entity_type VARCHAR(20) CHECK (entity_type IN ('LEDGER', 'MEMBER', 'ENTRY', 'SETTLEMENT', 'CATEGORY')) NOT NULL, -- 实体类型
+    entity_id   BIGINT         NOT NULL,                     -- 实体ID，对应的记录ID
+    action      VARCHAR(10) CHECK (action IN ('CREATE', 'UPDATE', 'DELETE')) NOT NULL, -- 操作类型
+    actor_id    BIGINT         NOT NULL,                     -- 操作者用户ID，关联users表的id
+    ledger_id   BIGINT,                                      -- 关联的账本ID（可选，提供操作上下文）
+    changes     TEXT,                                        -- 变更内容，TEXT或JSON格式存储前后值对比
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP          -- 创建时间，审计日志仅记录创建时间
+    
+    -- 注意：审计日志是不可变的，不包含updated_at、is_deleted等字段
+);
+CREATE INDEX idx_entity_type ON audit_logs (entity_type);                   -- 实体类型索引，支持按类型查询
+CREATE INDEX idx_entity_id ON audit_logs (entity_id);                       -- 实体ID索引，支持查询特定实体的操作历史
+CREATE INDEX idx_actor_id ON audit_logs (actor_id);                         -- 操作者ID索引，支持查询用户的操作记录
+CREATE INDEX idx_ledger_id_audit ON audit_logs (ledger_id);                 -- 账本ID索引，支持查询账本相关操作
+CREATE INDEX idx_created_at_audit ON audit_logs (created_at);               -- 创建时间索引，支持按时间查询和排序
+CREATE INDEX idx_entity_type_id_time ON audit_logs (entity_type, entity_id, created_at); -- 复合索引，支持查询特定实体的操作时间线
+
 -- ========================================
 -- 【新增】汇总视图表（物化视图的表实现）
 -- ========================================
@@ -404,6 +449,10 @@ CREATE TRIGGER update_settlements_updated_at
     BEFORE UPDATE ON settlements
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_notifications_updated_at 
+    BEFORE UPDATE ON notifications
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- 为所有表创建自动设置deleted_at的触发器
 CREATE TRIGGER set_roles_deleted_at 
     BEFORE UPDATE OF is_deleted ON roles
@@ -447,6 +496,10 @@ CREATE TRIGGER set_invitations_deleted_at
 
 CREATE TRIGGER set_settlements_deleted_at 
     BEFORE UPDATE OF is_deleted ON settlements
+    FOR EACH ROW EXECUTE FUNCTION set_deleted_at();
+
+CREATE TRIGGER set_notifications_deleted_at 
+    BEFORE UPDATE OF is_deleted ON notifications
     FOR EACH ROW EXECUTE FUNCTION set_deleted_at();
 
 -- 为新账本自动添加默认类别的触发器
@@ -660,6 +713,32 @@ COMMENT ON COLUMN settlements.ledger_name IS '冗余账本名称，避免关联a
 COMMENT ON COLUMN settlements.payer_nickname IS '冗余付款人昵称，避免关联users表查询';
 COMMENT ON COLUMN settlements.receiver_nickname IS '冗余收款人昵称，避免关联users表查询';
 COMMENT ON COLUMN settlements.description IS '结算说明，用户填写的转账备注';
+
+-- 通知表注释
+COMMENT ON TABLE notifications IS '通知表，用于推送各类消息给用户，支持邀请、系统、结算等类型，支持已读/未读状态，半年自动清理';
+COMMENT ON COLUMN notifications.id IS '主键ID，自增长';
+COMMENT ON COLUMN notifications.user_id IS '接收者用户ID，关联users表的id';
+COMMENT ON COLUMN notifications.type IS '通知类型，INVITATION表示邀请，SYSTEM表示系统通知，SETTLEMENT表示结算提醒';
+COMMENT ON COLUMN notifications.title IS '通知标题，简短描述通知内容';
+COMMENT ON COLUMN notifications.content IS '通知内容，详细说明信息';
+COMMENT ON COLUMN notifications.is_read IS '是否已读，默认为FALSE表示未读';
+COMMENT ON COLUMN notifications.read_at IS '读取时间，用户阅读通知的时间';
+COMMENT ON COLUMN notifications.created_at IS '创建时间，自动设置为当前时间戳';
+COMMENT ON COLUMN notifications.updated_at IS '更新时间，通过触发器自动维护';
+COMMENT ON COLUMN notifications.is_deleted IS '逻辑删除标志，用户可手动删除通知，FALSE表示未删除，TRUE表示已删除';
+COMMENT ON COLUMN notifications.deleted_at IS '逻辑删除时间，通过触发器自动设置';
+COMMENT ON COLUMN notifications.user_nickname IS '冗余接收者昵称，避免关联users表查询';
+
+-- 审计日志表注释
+COMMENT ON TABLE audit_logs IS '审计日志表，记录账本、成员、条目、结算等关键操作，仅增不删，用于追踪数据变更历史和合规审计';
+COMMENT ON COLUMN audit_logs.id IS '主键ID，自增长';
+COMMENT ON COLUMN audit_logs.entity_type IS '实体类型，LEDGER表示账本，MEMBER表示成员，ENTRY表示条目，SETTLEMENT表示结算，CATEGORY表示类别';
+COMMENT ON COLUMN audit_logs.entity_id IS '实体ID，对应的具体记录ID，用于定位被操作的数据';
+COMMENT ON COLUMN audit_logs.action IS '操作类型，CREATE表示新建，UPDATE表示更新，DELETE表示删除';
+COMMENT ON COLUMN audit_logs.actor_id IS '操作者用户ID，关联users表的id，记录谁执行了该操作';
+COMMENT ON COLUMN audit_logs.ledger_id IS '关联的账本ID（可选），关联account_ledgers表的id，提供操作的上下文';
+COMMENT ON COLUMN audit_logs.changes IS '变更内容，TEXT或JSON格式，记录操作的详细信息（如前后值对比）';
+COMMENT ON COLUMN audit_logs.created_at IS '创建时间，自动设置为当前时间戳，记录操作发生的时间';
 
 -- 支出记录汇总视图表注释
 COMMENT ON TABLE expense_summary_view IS '支出记录汇总视图表，预计算常用查询结果以提升性能';
