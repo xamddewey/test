@@ -1,56 +1,259 @@
-# Demo Backend
+# Shared Ledger Backend (共享账本后端)
 
-Spring Boot 3.4.5 backend application with JWT authentication and PostgreSQL database.
+Spring Boot 3.4.5 backend application for shared expense management with JWT authentication, PostgreSQL, and RabbitMQ.
 
 ## Technology Stack
 
 - **Framework**: Spring Boot 3.4.5
-- **Language**: Java 21/22
-- **ORM**: Jimmer 0.9.120 (migrated from MyBatis-Flex)
+- **Language**: Java 21
+- **ORM**: Jimmer 0.9.120
 - **Database**: PostgreSQL 16
+- **Message Queue**: RabbitMQ 3.13
 - **Security**: Spring Security + JWT
 - **Container**: Docker Compose
 
-## ORM Migration: MyBatis-Flex → Jimmer
+## Prerequisites
 
-This project has been successfully migrated from MyBatis-Flex to Jimmer ORM 0.9.120.
+- **Java 21** or higher
+- **Docker** and **Docker Compose**
+- **Maven 3.9+** (or use included `./mvnw`)
 
-### Key Changes
+## Quick Start
 
-1. **Entities**: Now immutable interfaces (not classes)
-   - Converted from `@Table` classes to `@Entity` interfaces
-   - Only getter methods, no setters (immutable by design)
-   - Jimmer APT generates implementation at compile time
+### 1. Start Infrastructure
 
-2. **Repositories**: Use `JRepository<Entity, ID>` pattern
-   - Spring Data style interface
-   - Type-safe query methods
-   - Custom queries using Jimmer DSL
+Start both PostgreSQL and RabbitMQ services:
 
-3. **Queries**: Type-safe DSL with compile-time code generation
-   - No more XML mappers
-   - Compile-time type checking
-   - IDE autocomplete support
+```bash
+docker compose up -d
+```
 
-4. **Associations**: Eager loading via Fetcher API
-   - GraphQL-style fetching
-   - Prevents N+1 query problems
-   - 30% faster than lazy loading
+This starts:
+- **PostgreSQL 16** on port `15432` (mapped from container port 5432)
+- **RabbitMQ 3.13** on port `5672` (AMQP) and `15672` (Management UI)
 
-### Why Jimmer?
+Verify services are running:
 
-- **GraphQL-style object fetching**: Fetch exactly what you need in one query
-- **Immutable + Dynamic objects**: Type-safe but flexible data shapes
-- **Powerful save commands**: Save entire object graphs in one call
-- **Advanced query optimization**: Automatic join removal and merging
-- **Built-in multi-level caching**: Consistency guarantees out of the box
-- **TypeScript generation**: Auto-generate TypeScript client code
+```bash
+docker compose ps
+```
+
+Both services should show status as "running" (healthy).
+
+### 2. Initialize Database
+
+Apply schema migrations (if not auto-applied):
+
+```bash
+# Schema file is in: src/main/resources/sql_script/myapp_schema_init.sql
+# Jimmer validates schema on startup via database-validation-mode=ERROR
+```
+
+### 3. Run Application
+
+Compile and run the application:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Application starts on `http://localhost:8080`
+
+### 4. Access Services
+
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html` (add springdoc-openapi dependency to enable)
+- **RabbitMQ Management**: `http://localhost:15672` (guest/guest)
+- **API Base URL**: `http://localhost:8080/api`
+
+## API Endpoints
+
+The application provides REST APIs across **7 controllers** with approximately **30 endpoints**:
+
+### 1. AuthController (`/api/auth`)
+
+Authentication and user registration.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/register` | Register new user |
+| POST | `/login` | Login and get JWT token |
+
+### 2. LedgerController (`/api/ledgers`)
+
+Ledger CRUD and member management.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/` | Create shared ledger |
+| GET | `/{ledgerId}` | Get ledger by ID |
+| GET | `/` | Get current user's joined ledgers |
+| PUT | `/{ledgerId}` | Update ledger (creator only) |
+| DELETE | `/{ledgerId}` | Delete ledger (creator only) |
+| GET | `/{ledgerId}/members` | Get ledger members |
+
+### 3. InvitationController (`/api/invitations`)
+
+Invitation flow for joining ledgers.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/` | Send invitation to user |
+| POST | `/{invitationId}/accept` | Accept invitation |
+| POST | `/{invitationId}/reject` | Reject invitation |
+| GET | `/my` | Get my pending invitations |
+| GET | `/ledger/{ledgerId}` | Get ledger's invitations |
+
+### 4. ExpenseController (`/api/expenses`)
+
+Expense record CRUD operations.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/` | Create expense record |
+| GET | `/{expenseId}` | Get expense by ID |
+| GET | `/ledger/{ledgerId}` | Get ledger expenses (paginated) |
+| PUT | `/{expenseId}` | Update expense |
+| DELETE | `/{expenseId}` | Delete expense |
+
+### 5. CategoryController (`/api/categories`)
+
+Expense category management.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/` | Create custom category |
+| GET | `/system` | Get system-default categories |
+| GET | `/ledger/{ledgerId}` | Get ledger's active categories |
+| POST | `/ledger/{ledgerId}/add?categoryId={id}` | Add category to ledger |
+| DELETE | `/ledger/{ledgerId}/category/{categoryId}` | Remove category from ledger |
+
+### 6. SettlementController (`/api/settlements`)
+
+Settlement calculation and execution.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/calculate/{ledgerId}` | Calculate minimum transfers (read-only) |
+| POST | `/` | Create settlement record |
+| POST | `/{settlementId}/complete` | Mark settlement completed |
+| GET | `/ledger/{ledgerId}` | Get ledger settlements (optional status filter) |
+| GET | `/my` | Get current user's settlements |
+
+### 7. StatisticsController (`/api/statistics`)
+
+Aggregated expense statistics (NEW in Task 7).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/ledger/{ledgerId}/category` | Category expense breakdown |
+| GET | `/ledger/{ledgerId}/timeline` | Timeline expense trends |
+| GET | `/ledger/{ledgerId}/member` | Member spending analysis |
+| GET | `/ledger/{ledgerId}/summary` | Overall ledger summary |
+
+**Total:** ~30 endpoints across 7 controllers
+
+## Project Structure
+
+```
+src/main/java/com/xdw/demobackend/
+├── config/                 # Configuration classes
+│   ├── RabbitMQConfig.java # RabbitMQ exchange/queue setup
+│   ├── SecurityConfig.java # JWT + Spring Security
+│   └── WebConfig.java      # CORS configuration
+├── controller/             # 7 REST controllers
+│   ├── AuthController.java
+│   ├── LedgerController.java
+│   ├── InvitationController.java
+│   ├── ExpenseController.java
+│   ├── CategoryController.java
+│   ├── SettlementController.java
+│   └── StatisticsController.java
+├── dto/                    # Request/Response DTOs
+│   ├── auth/               # Login/register DTOs
+│   ├── common/             # Pagination, sorting, ApiResult
+│   ├── ledger/             # Ledger CRUD DTOs
+│   ├── invitation/         # Invitation flow DTOs
+│   ├── expense/            # Expense CRUD DTOs
+│   ├── settlement/         # Settlement DTOs
+│   ├── statistics/         # Statistics response DTOs (NEW)
+│   └── message/            # RabbitMQ message DTOs (NEW)
+├── entity/                 # 15 Jimmer ORM entities
+│   ├── User.java
+│   ├── Role.java
+│   ├── UserRole.java
+│   ├── AccountLedger.java
+│   ├── LedgerMember.java
+│   ├── ExpenseRecord.java
+│   ├── ExpenseParticipant.java
+│   ├── ExpenseCategory.java
+│   ├── LedgerCategory.java
+│   ├── Invitation.java
+│   ├── Settlement.java
+│   ├── Notification.java
+│   ├── AuditLog.java
+│   ├── ExpenseSummaryView.java
+│   └── LedgerBalanceSummaryView.java
+├── repository/             # 15 JRepository interfaces
+├── service/                # Business logic services
+│   ├── auth/               # Authentication services
+│   ├── user/               # User management
+│   ├── ledger/             # Ledger operations
+│   ├── invitation/         # Invitation flow
+│   ├── expense/            # Expense management
+│   ├── settlement/         # Settlement calculation
+│   └── statistics/         # Statistics aggregation (NEW)
+├── mq/                     # RabbitMQ infrastructure (NEW)
+│   ├── producer/           # Message publishers
+│   │   ├── NotificationProducer.java
+│   │   ├── AuditProducer.java
+│   │   ├── SettlementProducer.java
+│   │   └── StatisticsProducer.java
+│   └── consumer/           # Message consumers
+│       ├── NotificationConsumer.java
+│       ├── AuditConsumer.java
+│       ├── SettlementConsumer.java
+│       └── StatisticsConsumer.java
+├── security/               # JWT authentication
+│   ├── JwtAuthenticationFilter.java
+│   ├── AuthEntryPointJwt.java
+│   └── UserPrincipal.java
+├── util/                   # Utility classes
+│   ├── JwtUtils.java
+│   └── SettlementAlgorithm.java
+└── exception/              # Exception handling
+    └── GlobalExceptionHandler.java
+```
 
 ## Configuration
 
-### Jimmer Properties
+### Database Configuration
 
-See `application.properties`:
+PostgreSQL connection settings in `application.properties`:
+
+```properties
+spring.datasource.url=jdbc:postgresql://localhost:15432/myapp_db
+spring.datasource.username=myapp_user
+spring.datasource.password=myapp_password
+```
+
+### RabbitMQ Configuration
+
+RabbitMQ connection settings:
+
+```properties
+spring.rabbitmq.host=localhost
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=guest
+spring.rabbitmq.password=guest
+```
+
+**RabbitMQ Architecture:**
+- **4 Topic Exchanges**: `ledger.notifications`, `ledger.audit`, `ledger.settlement`, `ledger.statistics`
+- **4 Durable Queues**: `notification-queue`, `audit-queue`, `settlement-queue`, `statistics-queue`
+- **Routing Keys**: Dynamic routing based on message type (e.g., `notification.INVITATION`, `audit.LEDGER.CREATE`)
+
+### Jimmer ORM Configuration
+
 ```properties
 jimmer.dialect=org.babyfish.jimmer.sql.dialect.PostgresDialect
 jimmer.show-sql=true
@@ -58,288 +261,228 @@ jimmer.pretty-sql=true
 jimmer.database-validation-mode=ERROR
 ```
 
-- **dialect**: PostgreSQL-specific SQL generation
-- **show-sql**: Log all generated SQL (useful for debugging)
-- **pretty-sql**: Format SQL output for readability
-- **database-validation-mode**: Strict schema validation on startup
+- **Immutable entities**: All entities are interfaces (not classes)
+- **Draft API**: Use `EntityDraft.$.produce()` for entity creation/updates
+- **Fetcher API**: Eager-load associations to prevent N+1 queries
+- **Nullability validation**: Strict matching with database schema
 
-### Maven Dependencies
+## Testing
 
-Key dependency in `pom.xml`:
-```xml
-<dependency>
-    <groupId>org.babyfish.jimmer</groupId>
-    <artifactId>jimmer-spring-boot-starter</artifactId>
-    <version>0.9.120</version>
-</dependency>
-```
-
-Annotation processor (required for code generation):
-```xml
-<annotationProcessorPath>
-    <path>
-        <groupId>org.babyfish.jimmer</groupId>
-        <artifactId>jimmer-apt</artifactId>
-        <version>0.9.120</version>
-    </path>
-</annotationProcessorPath>
-```
-
-## Critical Implementation Patterns
-
-### 1. Jimmer Insert vs Save
-
-```java
-// ✅ For NEW entities (no ID)
-User user = userRepository.insert(UserDraft.$.produce(draft -> {
-    draft.setUsername("john");
-    draft.setEmail("john@example.com");
-    draft.setPassword(encodedPassword);
-}));
-
-// ✅ For UPDATES (has ID)
-User updated = userRepository.update(UserDraft.$.produce(existing, draft -> {
-    draft.setNickname("John Doe");
-    draft.setUpdatedAt(LocalDateTime.now());
-}));
-
-// ❌ save() requires ID or key properties (for upsert)
-// Don't use save() for new entities without ID
-```
-
-**Why this matters:**
-- `insert()`: For creating new entities (ID auto-generated)
-- `update()`: For modifying existing entities (requires ID)
-- `save()`: For upsert operations (requires ID or unique key)
-
-### 2. Jimmer Fetcher API (Eager Loading)
-
-```java
-// ✅ Eagerly load associations to prevent UnloadedException
-import com.xdw.demobackend.entity.UserRoleFetcher;
-
-List<UserRole> userRoles = userRoleRepository.findByUserId(
-    userId,
-    UserRoleFetcher.$.role()  // Eagerly fetch role association
-);
-
-// Now safe to access: userRole.role().roleName()
-// No lazy loading exception, no N+1 queries
-```
-
-**Performance impact:**
-- **Without Fetcher**: 19ms, 6 queries (N+1 problem)
-- **With Fetcher**: 13ms, 1-2 queries (30% faster)
-- **Result**: 3x reduction in database round-trips
-
-### 3. Association Setters (Prevent Cascading Inserts)
-
-```java
-// ✅ Use ID-only references to link existing entities
-UserRoleDraft.$.produce(draft -> {
-    draft.setUser(UserDraft.$.produce(u -> u.setId(userId)));
-    draft.setRole(RoleDraft.$.produce(r -> r.setId(roleId)));
-});
-
-// ❌ Don't pass full objects (causes cascading insert attempts)
-draft.setUser(existingUser);  // May trigger duplicate key error
-draft.setRole(existingRole);  // Jimmer tries to cascade insert
-```
-
-**Why this matters:**
-- ID-only references create minimal proxy objects
-- Prevents unintended cascading insert/update operations
-- Avoids duplicate key constraint violations
-
-### 4. Database Schema Validation
-
-```java
-// Jimmer validates entity nullability matches database schema
-// If DB column is NULLABLE, entity MUST use @Nullable
-
-@Entity
-@Table(name = "users")
-public interface User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    long id();
-    
-    String username();  // NOT NULL in database
-    
-    @Nullable  // ✅ Matches nullable database column
-    LocalDateTime createdAt();
-}
-```
-
-**Validation rules:**
-- Entity field nullability MUST match database column nullability
-- `database-validation-mode=ERROR` enforces this strictly
-- Mismatches cause startup failure (better than runtime errors)
-
-## Performance Improvements
-
-### Query Optimization with Fetchers
-
-| Method | Time | Queries | Improvement |
-|--------|------|---------|-------------|
-| Lazy loading | 19ms | 6 (N+1) | Baseline |
-| Eager loading (Fetcher) | 13ms | 1-2 | **30% faster** |
-
-### Query Reduction Example
-
-**Before (N+1 problem):**
-```sql
-SELECT * FROM user_roles WHERE user_id = 1;
-SELECT * FROM roles WHERE id = 1;
-SELECT * FROM roles WHERE id = 2;
-SELECT * FROM roles WHERE id = 3;
--- 4+ queries for 3 roles
-```
-
-**After (with Fetcher):**
-```sql
-SELECT ur.*, r.* 
-FROM user_roles ur 
-LEFT JOIN roles r ON ur.role_id = r.id 
-WHERE ur.user_id = 1;
--- 1 query for all roles
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Java 21 or higher
-- Docker and Docker Compose (for PostgreSQL)
-- Maven 3.9+
-
-### Run the Application
+### Run All Tests
 
 ```bash
-# Start PostgreSQL database
-docker-compose up -d
-
-# Compile (triggers Jimmer APT code generation)
-mvn clean compile
-
-# Run the application
-mvn spring-boot:run
+./mvnw test
 ```
 
-Application will start on `http://localhost:8080`
+### Run Tests with Coverage
 
-### Test Endpoints
-
-**Register a new user:**
 ```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "Test123!"
-  }'
+./mvnw test jacoco:report
 ```
 
-**Login:**
+Coverage report available at: `target/site/jacoco/index.html`
+
+### Run Specific Test Class
+
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "password": "Test123!"
-  }'
+./mvnw test -Dtest=YourTestClass
 ```
 
-Response includes JWT token and user info:
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
-  "type": "Bearer",
-  "username": "testuser",
-  "email": "test@example.com",
-  "roles": ["LEDGER_PARTICIPANT"]
-}
+## Continuous Integration
 
-```
+CI workflow runs automatically on:
+- Push to `dev` branch
+- Pull requests targeting `dev` branch
 
-**Access protected endpoint:**
+**Workflow:**
+1. Set up Java 21 with Maven cache
+2. Start PostgreSQL and RabbitMQ service containers
+3. Run `./mvnw clean test` with test environment variables
+4. Upload test results as artifacts (available for 90 days)
+
+## Development Workflow
+
+### 1. Create Feature Branch
+
 ```bash
-curl http://localhost:8080/api/users/me \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+git checkout -b feature/your-feature-name
 ```
 
-## Migration Documentation
+### 2. Make Changes
 
-Complete migration notes are available in:
-- **[Learnings and Research](.sisyphus/notepads/mybatis-to-jimmer-migration/learnings.md)**
-  - Jimmer API research
-  - Entity patterns and conventions
-  - Repository implementation patterns
-  - Service layer best practices
+Edit code, add tests, verify compilation:
 
-- **[Architectural Decisions](.sisyphus/notepads/mybatis-to-jimmer-migration/decisions.md)**
-  - Why explicit UserRole entity (not @ManyToMany)
-  - Bidirectional association patterns
-  - Association ownership strategy
+```bash
+./mvnw clean compile
+```
 
-- **[Issues and Solutions](.sisyphus/notepads/mybatis-to-jimmer-migration/issues.md)**
-  - DatabaseValidationException fix (nullable timestamps)
-  - Jimmer save() vs insert() confusion
-  - Association handling patterns
-  - Lazy loading solutions
+### 3. Run Tests Locally
 
-## Key Files Modified
+```bash
+./mvnw test
+```
 
-### Configuration
-- `pom.xml` - Jimmer dependencies, jimmer-apt processor, removed MyBatis-Flex
-- `src/main/resources/application.properties` - Jimmer dialect and validation settings
+### 4. Commit Changes
 
-### Entities (converted to interfaces)
-- `src/main/java/com/xdw/demobackend/entity/User.java`
-- `src/main/java/com/xdw/demobackend/entity/Role.java`
-- `src/main/java/com/xdw/demobackend/entity/UserRole.java`
+Use conventional commit format (中文描述):
 
-### Repositories (new JRepository implementations)
-- `src/main/java/com/xdw/demobackend/repository/UserRepository.java`
-- `src/main/java/com/xdw/demobackend/repository/RoleRepository.java`
-- `src/main/java/com/xdw/demobackend/repository/UserRoleRepository.java`
+```bash
+git commit -m "feat(controller): 添加统计API"
+```
 
-### Services (updated to use Jimmer Draft API)
-- `src/main/java/com/xdw/demobackend/service/auth/impl/AuthServiceImpl.java`
-- `src/main/java/com/xdw/demobackend/service/auth/impl/UserDetailsServiceImpl.java`
-- `src/main/java/com/xdw/demobackend/service/user/impl/UserServiceImpl.java`
+Commit types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
-### Generated by Jimmer APT (compile-time)
-- `target/generated-sources/annotations/com/xdw/demobackend/entity/UserDraft.java`
-- `target/generated-sources/annotations/com/xdw/demobackend/entity/RoleDraft.java`
-- `target/generated-sources/annotations/com/xdw/demobackend/entity/UserRoleDraft.java`
-- `target/generated-sources/annotations/com/xdw/demobackend/entity/UserRoleFetcher.java`
-- Plus 17 more generated files (Table DSLs, Props, TableEx)
+### 5. Push to Remote
 
-## Migration Status
+```bash
+git push origin feature/your-feature-name
+```
 
-- ✅ **Phase 1**: Project setup (pom.xml, application.properties)
-- ✅ **Phase 2**: Entity conversion (User, Role, UserRole)
-- ✅ **Phase 3**: Repository implementation (JRepository pattern)
-- ✅ **Phase 4**: Service layer updates (Draft API, Fetchers)
-- ✅ **Phase 5**: Cleanup (removed mappers and old config)
-- ✅ **Phase 6**: Testing and verification (all tests passing)
-- ✅ **Phase 7**: Optimization (Fetcher API, query performance)
+CI workflow will run automatically.
 
-**Results:**
-- ✅ Compilation successful
-- ✅ Application starts in ~1.8 seconds
-- ✅ All tests passing (2/2, 100% success rate)
-- ✅ Registration and login endpoints working
-- ✅ 30% performance improvement with Fetchers
+## Troubleshooting
+
+### RabbitMQ Connection Refused
+
+**Symptoms:** Application fails to start with connection errors.
+
+**Solutions:**
+```bash
+docker compose ps
+docker compose logs rabbitmq
+
+docker compose restart rabbitmq
+```
+
+Verify port 5672 is not in use by another process:
+```bash
+lsof -i :5672
+```
+
+### Database Migration Issues
+
+**Symptoms:** Schema validation errors on startup.
+
+**Solutions:**
+```bash
+docker compose logs postgres
+
+docker compose down -v
+docker compose up -d
+```
+
+Check if schema was applied:
+```bash
+docker compose exec postgresql psql -U myapp_user -d myapp_db -c "\dt"
+```
+
+### Build Failures
+
+**Symptoms:** Maven compilation errors.
+
+**Solutions:**
+```bash
+./mvnw clean
+
+./mvnw compile
+
+rm -rf target/
+./mvnw clean compile
+```
+
+Check Java version:
+```bash
+java -version
+```
+
+### Port Conflicts
+
+**Symptoms:** Services fail to start due to port already in use.
+
+**Solutions:**
+
+Check which process is using the port:
+```bash
+lsof -i :8080
+lsof -i :15432
+lsof -i :5672
+```
+
+Kill the process or change port in `application.properties` / `compose.yaml`.
+
+### Lombok Compilation Issues
+
+**Symptoms:** LSP shows errors for getters/setters, but Maven succeeds.
+
+**Explanation:** Lombok generates code at compile time. LSP errors can be ignored if Maven compilation succeeds.
+
+**Solution:** Trust Maven output over LSP diagnostics for Lombok-annotated classes.
+
+## Key Features
+
+### 1. JWT Authentication
+
+Secure token-based authentication with refresh token support.
+
+### 2. Soft Delete Pattern
+
+All entities use `isDeleted` flag for logical deletion (no hard deletes).
+
+### 3. Redundant Fields Strategy
+
+Schema uses denormalized fields (nicknames, counts, amounts) to avoid JOINs in read queries.
+
+### 4. Async Processing
+
+RabbitMQ handles background tasks:
+- Notification delivery
+- Audit logging
+- Settlement recalculation
+- Statistics aggregation
+
+### 5. Settlement Algorithm
+
+Greedy minimum-transfer algorithm for debt optimization:
+- **Input:** Member balances (who owes what)
+- **Output:** Minimum number of transfers to settle all debts
+- **Complexity:** O(N log N)
+
+### 6. Statistics Engine
+
+Real-time aggregation for expense analytics:
+- Category breakdown
+- Timeline trends
+- Member spending analysis
+- Ledger summary
+
+## Database Schema
+
+### Core Tables
+
+- **users**: User accounts with roles
+- **account_ledgers**: Shared expense ledgers
+- **ledger_members**: User memberships in ledgers
+- **expense_records**: Individual expense entries
+- **expense_participants**: Who participated in each expense
+- **expense_categories**: Category definitions
+- **ledger_categories**: Ledger-specific category associations
+- **invitations**: Ledger join invitations
+- **settlements**: Payment settlement records
+- **notifications**: User notifications
+- **audit_logs**: System audit trail
+
+### Summary Views
+
+Pre-calculated aggregate tables for fast queries:
+
+- **expense_summary_view**: Expense statistics per ledger
+- **ledger_balance_summary_view**: Member balance summaries
 
 ## Resources
 
-- **Jimmer Official**: https://jimmer.org/
 - **Jimmer Documentation**: https://babyfish-ct.github.io/jimmer-doc/
-- **GitHub Repository**: https://github.com/babyfish-ct/jimmer
-- **Examples**: https://github.com/babyfish-ct/jimmer-examples
+- **Spring Boot Reference**: https://docs.spring.io/spring-boot/docs/current/reference/html/
+- **RabbitMQ Tutorials**: https://www.rabbitmq.com/getstarted.html
 
 ## License
 
