@@ -1,10 +1,12 @@
 package com.xdw.demobackend.dto.ledger;
 
 import com.xdw.demobackend.entity.AccountLedger;
+import com.xdw.demobackend.entity.AccountLedgerProps;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.babyfish.jimmer.ImmutableObjects;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -40,17 +42,57 @@ public class LedgerResponse {
         return LedgerResponse.builder()
                 .id(ledger.id())
                 .ledgerName(ledger.ledgerName())
-                .description(ledger.description())
+                .description(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.DESCRIPTION)
+                        ? ledger.description()
+                        : null
+                )
                 .creatorId(ledger.creatorId())
-                .creatorNickname(ledger.creatorNickname())
-                .memberCount(ledger.memberCount())
-                .invitedCount(ledger.invitedCount())
-                .totalExpenses(ledger.totalExpenses())
-                .recordCount(ledger.recordCount())
-                .lastExpenseDate(ledger.lastExpenseDate())
-                .lastActivityAt(ledger.lastActivityAt())
-                .createdAt(ledger.createdAt())
-                .updatedAt(ledger.updatedAt())
+                .creatorNickname(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.CREATOR_NICKNAME)
+                        ? ledger.creatorNickname()
+                        : null
+                )
+                .memberCount(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.MEMBER_COUNT)
+                        ? ledger.memberCount()
+                        : null
+                )
+                .invitedCount(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.INVITED_COUNT)
+                        ? ledger.invitedCount()
+                        : null
+                )
+                .totalExpenses(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.TOTAL_EXPENSES)
+                        ? ledger.totalExpenses()
+                        : null
+                )
+                .recordCount(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.RECORD_COUNT)
+                        ? ledger.recordCount()
+                        : null
+                )
+                .lastExpenseDate(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.LAST_EXPENSE_DATE)
+                        ? ledger.lastExpenseDate()
+                        : null
+                )
+                .lastActivityAt(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.LAST_ACTIVITY_AT)
+                        ? ledger.lastActivityAt()
+                        : null
+                )
+                .createdAt(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.CREATED_AT)
+                        ? ledger.createdAt()
+                        : null
+                )
+                .updatedAt(
+                    ImmutableObjects.isLoaded(ledger, AccountLedgerProps.UPDATED_AT)
+                        ? ledger.updatedAt()
+                        : null
+                )
                 .build();
     }
 }
