@@ -21,7 +21,7 @@ public interface ExpenseRecordRepository extends JRepository<ExpenseRecord, Long
     
     List<ExpenseRecord> findByPayerIdAndIsDeletedFalse(Long payerId);
     
-    List<ExpenseRecord> findByCreatedByAndIsDeletedFalse(Long createdBy);
+    List<ExpenseRecord> findByCreatedByIdAndIsDeletedFalse(Long createdById);
     
     List<ExpenseRecord> findByLedgerIdAndExpenseDateBetweenAndIsDeletedFalse(Long ledgerId, LocalDate startDate, LocalDate endDate);
     

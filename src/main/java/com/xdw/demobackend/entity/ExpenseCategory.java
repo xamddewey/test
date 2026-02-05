@@ -58,7 +58,7 @@ public interface ExpenseCategory {
     /**
      * Default display order
      */
-    Integer displayOrder();
+    int displayOrder();
 
     /**
      * Creation timestamp

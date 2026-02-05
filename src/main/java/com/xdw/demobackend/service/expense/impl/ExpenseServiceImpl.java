@@ -119,20 +119,20 @@ public class ExpenseServiceImpl implements ExpenseService {
         }
         final String finalParticipantsInfoJson = participantsInfoJson;
         
-        ExpenseRecord expense = expenseRecordRepository.insert(
-                ExpenseRecordDraft.$.produce(draft -> {
-                    draft.setLedger(AccountLedgerDraft.$.produce(l -> l.setId(request.getLedgerId())));
-                    draft.setCategory(ExpenseCategoryDraft.$.produce(c -> c.setId(request.getCategoryId())));
-                    draft.setPayer(UserDraft.$.produce(u -> u.setId(request.getPayerId())));
-                    draft.setCreatedBy(UserDraft.$.produce(u -> u.setId(userId)));
-                    draft.setAmount(request.getAmount());
-                    draft.setDescription(request.getDescription());
-                    draft.setExpenseDate(request.getExpenseDate());
-                    draft.setLedgerName(ledger.ledgerName());
-                    draft.setCategoryName(category.categoryName());
-                    draft.setPayerNickname(payer.nickname() != null ? payer.nickname() : payer.username());
-                    draft.setCreatorNickname(creator.nickname() != null ? creator.nickname() : creator.username());
-                    draft.setParticipantCount(participantCount);
+         ExpenseRecord expense = expenseRecordRepository.insert(
+                 ExpenseRecordDraft.$.produce(draft -> {
+                     draft.setLedger(AccountLedgerDraft.$.produce(l -> l.setId(request.getLedgerId())));
+                     draft.setCategory(ExpenseCategoryDraft.$.produce(c -> c.setId(request.getCategoryId())));
+                     draft.setPayer(UserDraft.$.produce(u -> u.setId(request.getPayerId())));
+                     draft.setCreatedBy(UserDraft.$.produce(u -> u.setId(userId)));
+                     draft.setAmount(request.getAmount());
+                     draft.setDescription(request.getDescription());
+                     draft.setExpenseDate(request.getExpenseDate());
+                     draft.setLedgerName(ledger.ledgerName());
+                     draft.setCategoryName(category.categoryName());
+                     draft.setPayerNickname(payer.nickname() != null ? payer.nickname() : payer.username());
+                     draft.setCreatorNickname(creator.nickname() != null ? creator.nickname() : creator.username());
+                     draft.setParticipantCount(participantCount);
                     draft.setAvgAmount(avgAmount);
                     draft.setParticipantsInfo(finalParticipantsInfoJson);
                     draft.setHasSettlement(false);

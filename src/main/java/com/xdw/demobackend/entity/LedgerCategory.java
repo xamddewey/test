@@ -41,7 +41,7 @@ public interface LedgerCategory {
     /**
      * Display order in this ledger
      */
-    Integer displayOrder();
+    int displayOrder();
 
     /**
      * Creation timestamp

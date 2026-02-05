@@ -25,12 +25,12 @@ public interface LedgerBalanceSummaryView {
     /**
      * Ledger ID
      */
-    Long ledgerId();
+    long ledgerId();
 
     /**
      * User ID
      */
-    Long userId();
+    long userId();
 
     /**
      * Ledger name

@@ -26,12 +26,12 @@ public interface ExpenseSummaryView {
     /**
      * Associated expense record ID (unique)
      */
-    Long recordId();
+    long recordId();
 
     /**
      * Ledger ID
      */
-    Long ledgerId();
+    long ledgerId();
 
     /**
      * Ledger name
@@ -46,7 +46,7 @@ public interface ExpenseSummaryView {
     /**
      * Payer ID
      */
-    Long payerId();
+    long payerId();
 
     /**
      * Payer nickname
@@ -77,7 +77,7 @@ public interface ExpenseSummaryView {
     /**
      * Participant count
      */
-    Integer participantCount();
+    int participantCount();
 
     /**
      * Average amount per participant

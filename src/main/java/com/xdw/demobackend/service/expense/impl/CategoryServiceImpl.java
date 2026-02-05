@@ -108,11 +108,11 @@ public class CategoryServiceImpl implements CategoryService {
         
         LocalDateTime now = LocalDateTime.now();
         
-        long maxDisplayOrder = ledgerCategoryRepository.findByLedgerIdAndIsDeletedFalse(ledgerId)
-                .stream()
-                .mapToInt(lc -> lc.displayOrder() != null ? lc.displayOrder() : 0)
-                .max()
-                .orElse(0);
+         long maxDisplayOrder = ledgerCategoryRepository.findByLedgerIdAndIsDeletedFalse(ledgerId)
+                 .stream()
+                 .mapToInt(LedgerCategory::displayOrder)
+                 .max()
+                 .orElse(0);
         
         ledgerCategoryRepository.insert(
                 LedgerCategoryDraft.$.produce(draft -> {
