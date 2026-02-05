@@ -365,8 +365,8 @@ Wave 3:
 - README 补充运行方式
 
 **Acceptance Criteria**:
-- [ ] `docker compose up` 可启动依赖
-- [ ] CI 能运行 ./mvnw test
+- [x] `docker compose up` 可启动依赖
+- [x] CI 能运行 ./mvnw test
 
 **Recommended Agent Profile**:
 - Category: `unspecified-high`
