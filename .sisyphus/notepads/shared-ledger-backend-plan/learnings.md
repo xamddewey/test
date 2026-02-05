@@ -705,3 +705,222 @@ None - compilation successful on first try with proper keyword handling.
 - **Total: 15 entities, 13 repositories**
 - All entities compile with Jimmer APT generation
 - All repositories extend JRepository<Entity, Long>
+
+## [2026-02-05 23:28] Task 3 - Ledger & Invitation REST API
+
+### Files Created
+**DTOs (6 files):**
+- `CreateLedgerRequest.java` - 账本创建请求，validation on ledgerName (NotBlank, max 100)
+- `UpdateLedgerRequest.java` - 账本更新请求，optional fields
+- `LedgerResponse.java` - 账本响应，包含统计字段 (memberCount, totalExpenses等)
+- `MemberResponse.java` - 成员响应，包含余额字段 (totalPaid, totalShared, balance)
+- `InviteMemberRequest.java` - 邀请请求，ledgerId + recipientId
+- `InvitationResponse.java` - 邀请响应，包含状态 (PENDING/ACCEPTED/REJECTED)
+
+**Services (4 files):**
+- `LedgerService.java` + `impl/LedgerServiceImpl.java` - 账本CRUD + 成员查询
+- `InvitationService.java` + `impl/InvitationServiceImpl.java` - 邀请流程管理
+
+**Controllers (2 files):**
+- `LedgerController.java` - 6 endpoints (POST /, GET /{id}, GET /, PUT /{id}, DELETE /{id}, GET /{id}/members)
+- `InvitationController.java` - 5 endpoints (POST /, POST /{id}/accept, POST /{id}/reject, GET /my, GET /ledger/{id})
+
+### Key Patterns Implemented
+
+**1. DTO Validation:**
+```java
+@NotBlank(message = "账本名称不能为空")
+@Size(max = 100, message = "账本名称不能超过100字符")
+private String ledgerName;
+```
+
+**2. Entity-to-DTO Conversion:**
+```java
+public static LedgerResponse fromEntity(AccountLedger ledger) {
+    return LedgerResponse.builder()
+        .id(ledger.id())
+        .ledgerName(ledger.ledgerName())
+        // ... map all fields
+        .build();
+}
+```
+
+**3. Jimmer Insert Pattern (New Entity):**
+```java
+AccountLedger ledger = accountLedgerRepository.insert(
+    AccountLedgerDraft.$.produce(draft -> {
+        draft.setLedgerName(request.getLedgerName());
+        draft.setCreatorNickname(creator.nickname() != null ? creator.nickname() : creator.username());
+        draft.setMemberCount(1);
+        draft.setInvitedCount(0);
+        draft.setTotalExpenses(BigDecimal.ZERO);
+        draft.setIsDeleted(false);
+    })
+);
+```
+
+**4. Jimmer Update Pattern (Existing Entity):**
+```java
+AccountLedger updated = AccountLedgerDraft.$.produce(ledger, draft -> {
+    if (request.getLedgerName() != null) {
+        draft.setLedgerName(request.getLedgerName());
+    }
+    draft.setUpdatedAt(LocalDateTime.now());
+    draft.setLastActivityAt(LocalDateTime.now());
+});
+accountLedgerRepository.save(updated);
+```
+
+**5. ID-only References (Avoid Cascade Insert):**
+```java
+draft.setLedger(AccountLedgerDraft.$.produce(l -> l.setId(ledgerId)));
+draft.setUser(UserDraft.$.produce(u -> u.setId(userId)));
+```
+
+**6. Null-safe Counter Updates:**
+```java
+draft.setInvitedCount((ledger.invitedCount() != null ? ledger.invitedCount() : 0) + 1);
+```
+
+**7. Primitive long Comparison (NOT .equals()):**
+```java
+if (invitation.recipientId() != userId) {  // ✅ Correct for primitive long
+    throw new RuntimeException("只有受邀者可以接受邀请");
+}
+```
+
+### Business Rules Implemented
+
+**Ledger Creation:**
+- Auto-populate `creatorNickname` from User entity (fallback to username)
+- Initialize counters: `memberCount=1`, `invitedCount=0`, `totalExpenses=0`, `recordCount=0`
+- Create first LedgerMember with `JOINED` status for creator
+- Initialize member balance fields: `totalPaid=0`, `totalShared=0`, `balance=0`
+
+**Ledger Update:**
+- **Permission**: Only creator can update (check `ledger.creatorId() != userId`)
+- When `ledgerName` changes: Update `ledgerName` in ALL LedgerMember records (propagate redundant field)
+- Update `lastActivityAt` timestamp
+
+**Ledger Delete:**
+- **Permission**: Only creator can delete
+- Soft delete: set `isDeleted=true`, `deletedAt=now()`
+
+**Get User Ledgers:**
+- Query via `findByUserIdAndJoinStatusAndIsDeletedFalse(userId, JoinStatus.JOINED)`
+- Return only JOINED ledgers (not INVITED status)
+
+**Send Invitation:**
+- **Permission**: Sender must be member (JOINED status)
+- **Validation**:
+  - Not self-invite (`senderId.equals(recipientId)`)
+  - Recipient not already member
+  - No existing PENDING invitation
+- Auto-populate redundant fields: `ledgerName`, `senderNickname`, `recipientNickname`
+- Increment `invitedCount` on AccountLedger
+- Update `lastActivityAt`
+
+**Accept Invitation:**
+- **Permission**: Current user must be recipient (`invitation.recipientId() != userId`)
+- **Validation**: Invitation status must be PENDING
+- Update invitation status to ACCEPTED
+- Create or update LedgerMember with JOINED status
+- Initialize member balance fields (all zeros)
+- Update AccountLedger: `memberCount++`, `invitedCount--`
+
+**Reject Invitation:**
+- **Permission**: Current user must be recipient
+- Update invitation status to REJECTED
+- Decrement `invitedCount` on AccountLedger
+
+### Controller Patterns
+
+**Consistent Structure:**
+```java
+@RestController
+@RequestMapping("/api/ledgers")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*", maxAge = 3600)
+@Slf4j
+public class LedgerController {
+    private final LedgerService ledgerService;
+    
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<LedgerResponse> createLedger(
+        @Valid @RequestBody CreateLedgerRequest request,
+        @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        try {
+            LedgerResponse response = ledgerService.createLedger(request, currentUser.getId());
+            return ApiResult.success("账本创建成功", response);
+        } catch (Exception e) {
+            return ApiResult.businessError("创建账本失败: " + e.getMessage());
+        }
+    }
+}
+```
+
+**Error Handling:**
+- Use `ApiResult.businessError()` for business exceptions
+- Consistent Chinese error messages
+- No exposure of internal exception details
+
+### API Endpoints Summary
+
+**LedgerController (`/api/ledgers`):**
+1. `POST /` - Create ledger
+2. `GET /{ledgerId}` - Get ledger by ID (member permission)
+3. `GET /` - Get user's joined ledgers
+4. `PUT /{ledgerId}` - Update ledger (creator only)
+5. `DELETE /{ledgerId}` - Soft delete ledger (creator only)
+6. `GET /{ledgerId}/members` - Get joined members (member permission)
+
+**InvitationController (`/api/invitations`):**
+1. `POST /` - Send invitation (member permission)
+2. `POST /{invitationId}/accept` - Accept invitation (recipient only)
+3. `POST /{invitationId}/reject` - Reject invitation (recipient only)
+4. `GET /my` - Get my pending invitations
+5. `GET /ledger/{ledgerId}` - Get ledger's all invitations (member permission)
+
+### Compilation Results
+- **Status**: ✅ SUCCESS
+- **Time**: 3.357s
+- **Files Compiled**: 66 source files
+- **Warnings**: 2 (unrelated to new code - JwtResponse @Builder, UserPrincipal hashCode)
+- **Generated Classes**: All services and controllers compiled to .class files
+
+### Key Learnings
+
+**Lombok @Data Getter Pattern:**
+- Lombok generates `getLedgerName()` for field `ledgerName`
+- LSP may show errors before compilation, but Maven resolves them
+- Always use getter methods (`request.getLedgerName()`) not direct field access
+
+**Primitive long vs Long:**
+- Entity methods return primitive `long id()` (not `Long`)
+- Use `!=` for comparison, NOT `.equals()`
+- Example: `if (ledger.creatorId() != userId)` ✅
+- Anti-pattern: `if (!ledger.creatorId().equals(userId))` ❌ (compile error)
+
+**Redundant Field Propagation:**
+- When `ledgerName` changes in AccountLedger, must update ALL LedgerMember records
+- Query all members, loop through, produce draft, save each one
+- Critical for denormalized data consistency
+
+**No Leave Endpoint:**
+- Task spec explicitly states: "Member cannot 退出账本 (no leave endpoint)"
+- Only creator can delete entire ledger (soft delete)
+- Members can only be removed by ledger deletion
+
+**Jimmer Repository Pattern:**
+- `insert()` for new entities (no ID)
+- `save()` for updates (has ID)
+- Both use Draft API with `.produce()` lambda
+- ID-only references prevent cascade operations
+
+### Testing TODO (Not in This Task)
+- Integration tests for full invitation flow
+- Permission boundary tests (non-member access)
+- Concurrent invitation handling
+- Redundant field consistency verification
