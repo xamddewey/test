@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   postgresql:
-    image: postgres:15
-    container_name: dev-postgres
+    image: postgres:16
+    container_name: shared-ledger-postgres
     environment:
       POSTGRES_DB: myapp_db
       POSTGRES_USER: myapp_user
@@ -22,8 +20,29 @@ services:
       timeout: 10s
       retries: 3
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: shared-ledger-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+    driver: local
+  rabbitmq_data:
     driver: local
 
 networks:
