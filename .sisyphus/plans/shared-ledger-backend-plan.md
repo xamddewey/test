@@ -60,9 +60,9 @@
 - 测试与 CI 基础
 
 ### Definition of Done
-- [ ] 本地 `./mvnw test` 通过
-- [ ] 启动后通过 Swagger 可调用所有 MVP 端点
-- [ ] 账本协作、邀请、记账、结算、统计、通知功能可完整跑通
+- [x] 本地 `./mvnw test` 通过
+- [x] 启动后通过 Swagger 可调用所有 MVP 端点
+- [ ] 账本协作、邀请、记账、结算、统计、通知功能可完整跑通 (DEFERRED: 需手动集成测试验证完整流程)
 
 ### Must Have
 - 账本多成员共享 + 邀请 + 不可退出
@@ -384,7 +384,7 @@ Wave 3:
 
 ## Success Criteria
 
-- [ ] 所有 MVP 功能端点可通过 Swagger 调用
-- [ ] 结算逻辑正确（最少转账次数）
-- [ ] RabbitMQ 异步通知可追踪
-- [ ] Docker Compose 与 CI 可运行
+- [x] 所有 MVP 功能端点可通过 Swagger 调用
+- [x] 结算逻辑正确（最少转账次数）
+- [x] RabbitMQ 异步通知可追踪
+- [x] Docker Compose 与 CI 可运行
