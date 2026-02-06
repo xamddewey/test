@@ -23,10 +23,10 @@ public class StatisticsController {
     
     private final StatisticsService statisticsService;
     
-    @GetMapping("/by-category")
+    @GetMapping("/ledger/{ledgerId}/category")
     @PreAuthorize("isAuthenticated()")
     public ApiResult<List<CategoryStatisticsResponse>> getStatisticsByCategory(
-            @RequestParam Long ledgerId,
+            @PathVariable Long ledgerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal UserPrincipal currentUser
@@ -41,10 +41,10 @@ public class StatisticsController {
         }
     }
     
-    @GetMapping("/by-member")
+    @GetMapping("/ledger/{ledgerId}/member")
     @PreAuthorize("isAuthenticated()")
     public ApiResult<List<MemberStatisticsResponse>> getStatisticsByMember(
-            @RequestParam Long ledgerId,
+            @PathVariable Long ledgerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal UserPrincipal currentUser
@@ -59,10 +59,10 @@ public class StatisticsController {
         }
     }
     
-    @GetMapping("/by-time")
+    @GetMapping("/ledger/{ledgerId}/timeline")
     @PreAuthorize("isAuthenticated()")
     public ApiResult<List<TimeRangeStatisticsResponse>> getStatisticsByTime(
-            @RequestParam Long ledgerId,
+            @PathVariable Long ledgerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "MONTH") StatisticsRequest.TimeGranularity granularity,
@@ -78,10 +78,10 @@ public class StatisticsController {
         }
     }
     
-    @GetMapping("/overall")
+    @GetMapping("/ledger/{ledgerId}/summary")
     @PreAuthorize("isAuthenticated()")
     public ApiResult<OverallStatisticsResponse> getOverallStatistics(
-            @RequestParam Long ledgerId,
+            @PathVariable Long ledgerId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "MONTH") StatisticsRequest.TimeGranularity granularity,
